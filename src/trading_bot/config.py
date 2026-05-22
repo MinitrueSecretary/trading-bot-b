@@ -61,7 +61,9 @@ class Settings(BaseSettings):
     macd_signal: int = Field(default=9, description='MACD signal period')
 
     # --- Risk ---
-    risk_per_trade_pct: float = Field(default=1.0, gt=0, le=100, description='% of balance risked per trade')
+    risk_per_trade_pct: float = Field(
+        default=1.0, gt=0, le=100, description='% of balance risked per trade'
+    )
     max_open_trades: int = Field(default=3, description='Max concurrent open positions')
     stop_loss_pips: float = Field(default=30.0, description='Default stop-loss in pips')
     take_profit_pips: float = Field(default=60.0, description='Default take-profit in pips')
@@ -71,9 +73,23 @@ class Settings(BaseSettings):
     mt5_password: str | None = Field(default=None, description='MT5 account password')
     mt5_server: str | None = Field(default=None, description='MT5 broker server')
     mt5_magic: int = Field(default=123456, description='MT5 magic number for order identification')
+    mt5_symbol_suffix: str = Field(
+        default='m',
+        description='Suffix appended to symbol names when calling the MT5 API (e.g. "m" → EURUSDm). Set to "" to disable.',
+    )
+
+    # --- Backtest output ---
+    backtest_save_chart: bool = Field(
+        default=True, description='Save HTML chart after a backtest run'
+    )
+    backtest_save_csv: bool = Field(
+        default=True, description='Save trades CSV after a backtest run'
+    )
 
     # --- Discord ---
-    discord_webhook_url: str | None = Field(default=None, description='Discord webhook URL for alerts')
+    discord_webhook_url: str | None = Field(
+        default=None, description='Discord webhook URL for alerts'
+    )
 
     @field_validator('symbols', mode='before')
     @classmethod
@@ -96,6 +112,22 @@ class Settings(BaseSettings):
     def yf_symbol_for(self, symbol: str) -> str:
         """Convert any MT5-format symbol to yfinance format."""
         return f'{symbol}=X'
+
+    def mt5_symbol_for(self, symbol: str) -> str:
+        """Return the broker-specific MT5 symbol name for *symbol*.
+
+        Appends :attr:`mt5_symbol_suffix` so that internal symbols such as
+        ``'EURUSD'`` are translated to the broker variant (e.g. ``'EURUSDm'``)
+        before any MT5 API call.  Set ``BOT_MT5_SYMBOL_SUFFIX=""`` in the
+        environment to leave symbols unchanged.
+
+        Args:
+            symbol: Clean symbol name (e.g. ``'EURUSD'``).
+
+        Returns:
+            Symbol with the configured suffix appended (e.g. ``'EURUSDm'``).
+        """
+        return f'{symbol}{self.mt5_symbol_suffix}'
 
 
 def get_settings() -> Settings:

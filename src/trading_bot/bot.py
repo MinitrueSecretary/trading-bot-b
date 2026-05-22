@@ -101,7 +101,9 @@ class TradingBot:
         Args:
             symbol: Instrument to process.
         """
-        yf_symbol = self._settings.yf_symbol_for(symbol) if not self._settings.is_windows else symbol
+        yf_symbol = (
+            self._settings.yf_symbol_for(symbol) if not self._settings.is_windows else symbol
+        )
 
         df = self._provider.get_ohlcv(yf_symbol, self._settings.timeframe)
         signal = self._strategy.generate_signal(df, symbol)
@@ -115,9 +117,7 @@ class TradingBot:
         if isinstance(self._executor, PaperExecutor):
             open_count = len(self._executor.open_positions)
             if open_count >= self._settings.max_open_trades:
-                logger.info(
-                    f'[Bot] Max open trades reached ({open_count}); skipping {symbol}'
-                )
+                logger.info(f'[Bot] Max open trades reached ({open_count}); skipping {symbol}')
                 return
 
         # Notify Discord about the signal

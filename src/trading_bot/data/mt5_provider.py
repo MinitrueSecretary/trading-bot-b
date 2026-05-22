@@ -18,14 +18,14 @@ logger = get_logger(__name__)
 
 # Timeframe mapping from Timeframe enum to MT5 timeframe constants
 _MT5_TF_MAP: dict[str, int] = {
-    '1m': 1,    # mt5.TIMEFRAME_M1
-    '5m': 5,    # mt5.TIMEFRAME_M5
+    '1m': 1,  # mt5.TIMEFRAME_M1
+    '5m': 5,  # mt5.TIMEFRAME_M5
     '15m': 15,  # mt5.TIMEFRAME_M15
     '30m': 30,  # mt5.TIMEFRAME_M30
     '1h': 16385,  # mt5.TIMEFRAME_H1
     '4h': 16388,  # mt5.TIMEFRAME_H4
     '1d': 16408,  # mt5.TIMEFRAME_D1
-    '1wk': 32769, # mt5.TIMEFRAME_W1
+    '1wk': 32769,  # mt5.TIMEFRAME_W1
 }
 
 
@@ -67,16 +67,14 @@ class MT5Provider(BaseDataProvider):
         """
         if sys.platform != 'win32':
             raise RuntimeError(
-                'MT5Provider is only available on Windows. '
-                'Use YFinanceProvider on other platforms.'
+                'MT5Provider is only available on Windows. Use YFinanceProvider on other platforms.'
             )
 
         try:
             import MetaTrader5 as mt5  # type: ignore[import]  # noqa: N813
         except ImportError as exc:
             raise RuntimeError(
-                'MetaTrader5 package not installed. '
-                'Run: uv pip install MetaTrader5'
+                'MetaTrader5 package not installed. Run: uv pip install MetaTrader5'
             ) from exc
 
         self._mt5 = mt5
@@ -138,12 +136,13 @@ class MT5Provider(BaseDataProvider):
 
         mt5 = self._mt5
         mt5_tf = _MT5_TF_MAP[timeframe.value]
+        mt5_symbol = self._settings.mt5_symbol_for(symbol)
 
-        rates = mt5.copy_rates_from_pos(symbol, mt5_tf, 0, bars)  # type: ignore[union-attr]
+        rates = mt5.copy_rates_from_pos(mt5_symbol, mt5_tf, 0, bars)  # type: ignore[union-attr]
 
         if rates is None or len(rates) == 0:
             error = mt5.last_error()  # type: ignore[union-attr]
-            raise RuntimeError(f'MT5 returned no data for {symbol}: {error}')
+            raise RuntimeError(f'MT5 returned no data for {mt5_symbol}: {error}')
 
         df = pd.DataFrame(rates)
         df['time'] = pd.to_datetime(df['time'], unit='s', utc=True)
@@ -176,9 +175,10 @@ class MT5Provider(BaseDataProvider):
             raise RuntimeError('MT5Provider is not connected.')
 
         mt5 = self._mt5
-        tick = mt5.symbol_info_tick(symbol)  # type: ignore[union-attr]
+        mt5_symbol = self._settings.mt5_symbol_for(symbol)
+        tick = mt5.symbol_info_tick(mt5_symbol)  # type: ignore[union-attr]
         if tick is None:
-            raise RuntimeError(f'Cannot get tick for {symbol}: {mt5.last_error()}')  # type: ignore[union-attr]
+            raise RuntimeError(f'Cannot get tick for {mt5_symbol}: {mt5.last_error()}')  # type: ignore[union-attr]
         return float(tick.ask)
 
     # ------------------------------------------------------------------

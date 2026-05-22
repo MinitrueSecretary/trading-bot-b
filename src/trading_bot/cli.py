@@ -1,6 +1,5 @@
 """Command-line interface for the trading bot."""
 
-
 import click
 from rich.table import Table
 
@@ -19,6 +18,7 @@ def main() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # trade command
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @main.command()
 @click.option('--dry-run/--live', default=None, help='Override dry_run setting.')
@@ -41,31 +41,47 @@ def trade(dry_run: bool | None, strategy: str | None) -> None:
 # backtest command
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @main.command()
 @click.option('--symbol', default=None, help='Symbol to backtest (e.g. EURUSD).')
 @click.option('--strategy', default=None, help='Strategy name.')
 @click.option('--bars', default=1000, show_default=True, help='Number of bars to fetch.')
-@click.option('--chart/--no-chart', default=True, show_default=True, help='Open results chart.')
-@click.option('--save-html', 'save_html', default=None, help='Save chart to HTML file.')
+@click.option(
+    '--save-chart/--no-save-chart',
+    'save_chart',
+    default=None,
+    help='Build and save the HTML chart (default: BOT_BACKTEST_SAVE_CHART).',
+)
+@click.option(
+    '--save-csv/--no-save-csv',
+    'save_csv',
+    default=None,
+    help='Save trades DataFrame to CSV (default: BOT_BACKTEST_SAVE_CSV).',
+)
 def backtest(
     symbol: str | None,
     strategy: str | None,
     bars: int,
-    chart: bool,
-    save_html: str | None,
+    save_chart: bool | None,
+    save_csv: bool | None,
 ) -> None:
     """Run a strategy backtest and print statistics."""
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
-    from trading_bot.visualization.charts import plot_backtest, show
-    from trading_bot.visualization.charts import save_html as save_html_fn
+    from trading_bot.visualization.charts import plot_backtest, save_chart as save_chart_fn
 
     settings = get_settings()
     if symbol:
         settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
     if strategy:
         settings = settings.model_copy(update={'strategy_name': strategy})
+
+    # Resolve flag defaults from settings / env
+    if save_chart is None:
+        save_chart = settings.backtest_save_chart
+    if save_csv is None:
+        save_csv = settings.backtest_save_csv
 
     provider = get_data_provider(settings)
     provider.connect()
@@ -87,18 +103,20 @@ def backtest(
 
     console.print(result.summary())
 
-    if chart:
+    if save_csv:
+        dest = result.save_trades_csv()
+        console.print(f'[green]Trades saved → {dest}[/]')
+
+    if save_chart:
         fig = plot_backtest(result)
-        if save_html:
-            save_html_fn(fig, save_html)
-            console.print(f'[green]Chart saved → {save_html}[/]')
-        else:
-            show(fig)
+        dest = save_chart_fn(fig, settings.primary_symbol, label='backtest')
+        console.print(f'[green]Chart saved → {dest}[/]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # analyse command
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @main.command()
 @click.option('--symbol', default=None, help='Symbol to analyse.')
@@ -108,7 +126,7 @@ def analyse(symbol: str | None, bars: int, chart: bool) -> None:
     """Fetch live data, generate a signal, and optionally show a chart."""
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
-    from trading_bot.visualization.charts import plot_ohlcv, show
+    from trading_bot.visualization.charts import plot_ohlcv, save_chart
 
     settings = get_settings()
     if symbol:
@@ -126,7 +144,13 @@ def analyse(symbol: str | None, bars: int, chart: bool) -> None:
     signal = strat.generate_signal(df, settings.primary_symbol)
 
     # Pretty-print signal
-    colour = 'green' if signal.signal_type.value == 'BUY' else 'red' if signal.signal_type.value == 'SELL' else 'yellow'
+    colour = (
+        'green'
+        if signal.signal_type.value == 'BUY'
+        else 'red'
+        if signal.signal_type.value == 'SELL'
+        else 'yellow'
+    )
     console.print(
         f'\n[bold {colour}]{signal.signal_type.value}[/bold {colour}] signal for '
         f'[bold]{signal.symbol}[/bold]'
@@ -147,12 +171,42 @@ def analyse(symbol: str | None, bars: int, chart: bool) -> None:
             show_rsi=True,
             show_volume=True,
         )
-        show(fig)
+        dest = save_chart(fig, settings.primary_symbol, label='analyse')
+        console.print(f'[green]Chart saved → {dest}[/]')
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# ping-discord command
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@main.command('ping-discord')
+def ping_discord() -> None:
+    """Send a test ping to the configured Discord webhook and report the result."""
+    from trading_bot.notifications.discord import DiscordNotifier
+
+    settings = get_settings()
+
+    if not settings.discord_webhook_url:
+        console.print('[bold red]✗[/bold red] No Discord webhook URL configured.')
+        console.print('  Set [cyan]BOT_DISCORD_WEBHOOK_URL[/cyan] in your [cyan].env[/cyan] file.')
+        raise SystemExit(1)
+
+    console.print('[cyan]Pinging Discord webhook…[/cyan]')
+    notifier = DiscordNotifier(settings.discord_webhook_url)
+    ok = notifier.ping()
+
+    if ok:
+        console.print('[bold green]✓[/bold green] Ping delivered — check your Discord channel.')
+    else:
+        console.print('[bold red]✗[/bold red] Ping failed — verify the webhook URL and network.')
+        raise SystemExit(1)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # strategies command
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @main.command('list-strategies')
 def list_strategies_cmd() -> None:

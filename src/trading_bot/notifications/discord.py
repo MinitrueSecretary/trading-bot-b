@@ -13,9 +13,9 @@ from trading_bot.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_COLOUR_BUY = 3066993    # green
+_COLOUR_BUY = 3066993  # green
 _COLOUR_SELL = 15158332  # red
-_COLOUR_INFO = 3447003   # blue
+_COLOUR_INFO = 3447003  # blue
 _COLOUR_WARN = 15105570  # orange
 
 
@@ -154,3 +154,29 @@ class DiscordNotifier:
         payload = self._embed(title=f'🚨 {title}', description=message, colour=_COLOUR_WARN)
         logger.error(f'[Discord] Error notification: {title} — {message}')
         self._send(payload)
+
+    def ping(self) -> bool:
+        """Send a test message to verify the webhook is reachable.
+
+        Returns:
+            ``True`` if the message was delivered (HTTP 204), ``False`` otherwise.
+        """
+        if not self._enabled or not self._url:
+            logger.warning('[Discord] Ping skipped — no webhook URL configured.')
+            return False
+
+        payload = self._embed(
+            title='🏓 Ping',
+            description='Webhook connection test — all systems go!',
+            colour=_COLOUR_INFO,
+        )
+
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.post(self._url, json=payload)
+                resp.raise_for_status()
+                logger.info(f'[Discord] Ping successful (HTTP {resp.status_code}).')
+                return True
+        except httpx.HTTPError as exc:
+            logger.error(f'[Discord] Ping failed: {exc}')
+            return False
