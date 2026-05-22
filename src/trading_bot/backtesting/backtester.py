@@ -1,7 +1,9 @@
 """Vectorised backtesting engine for evaluating trading strategies."""
 
+import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -55,6 +57,39 @@ class BacktestResult:
     sharpe_ratio: float
     trades: pd.DataFrame = field(default_factory=pd.DataFrame)
     equity_curve: pd.Series = field(default_factory=pd.Series)  # type: ignore[type-arg]
+
+    def save_trades_csv(
+        self,
+        path: str | Path | None = None,
+        output_dir: str | Path = 'trades',
+    ) -> Path:
+        """Save the trades DataFrame to a CSV file and return the path.
+
+        If *path* is given it is used directly; otherwise a timestamped file
+        is created inside *output_dir* following the same convention as
+        :func:`~trading_bot.visualization.charts.save_chart`.
+
+        Args:
+            path: Explicit output path (e.g. ``'my_trades.csv'``).  When
+                ``None`` an auto-generated name is used.
+            output_dir: Folder for auto-generated files (default: ``trades/``
+                relative to cwd).  Ignored when *path* is provided.
+
+        Returns:
+            :class:`~pathlib.Path` of the saved file.
+        """
+        if path is not None:
+            dest = Path(path)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            folder = Path(output_dir)
+            folder.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')
+            safe_symbol = re.sub(r'[^\w]', '_', self.symbol)
+            dest = folder / f'{safe_symbol}_{self.strategy_name}_{ts}.csv'
+
+        self.trades.to_csv(dest, index=False)
+        return dest
 
     def summary(self) -> str:
         """Return a formatted text summary of the backtest results."""

@@ -46,26 +46,42 @@ def trade(dry_run: bool | None, strategy: str | None) -> None:
 @click.option('--symbol', default=None, help='Symbol to backtest (e.g. EURUSD).')
 @click.option('--strategy', default=None, help='Strategy name.')
 @click.option('--bars', default=1000, show_default=True, help='Number of bars to fetch.')
-@click.option('--chart/--no-chart', default=True, show_default=True, help='Open results chart.')
-@click.option('--save-html', 'save_html', default=None, help='Save chart to HTML file.')
+@click.option(
+    '--save-chart/--no-save-chart',
+    'save_chart',
+    default=None,
+    help='Build and save the HTML chart (default: BOT_BACKTEST_SAVE_CHART).',
+)
+@click.option(
+    '--save-csv/--no-save-csv',
+    'save_csv',
+    default=None,
+    help='Save trades DataFrame to CSV (default: BOT_BACKTEST_SAVE_CSV).',
+)
 def backtest(
     symbol: str | None,
     strategy: str | None,
     bars: int,
-    chart: bool,
-    save_html: str | None,
+    save_chart: bool | None,
+    save_csv: bool | None,
 ) -> None:
     """Run a strategy backtest and print statistics."""
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
-    from trading_bot.visualization.charts import plot_backtest, save_chart, save_html as save_html_fn
+    from trading_bot.visualization.charts import plot_backtest, save_chart as save_chart_fn
 
     settings = get_settings()
     if symbol:
         settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
     if strategy:
         settings = settings.model_copy(update={'strategy_name': strategy})
+
+    # Resolve flag defaults from settings / env
+    if save_chart is None:
+        save_chart = settings.backtest_save_chart
+    if save_csv is None:
+        save_csv = settings.backtest_save_csv
 
     provider = get_data_provider(settings)
     provider.connect()
@@ -87,14 +103,14 @@ def backtest(
 
     console.print(result.summary())
 
-    if chart:
+    if save_csv:
+        dest = result.save_trades_csv()
+        console.print(f'[green]Trades saved → {dest}[/]')
+
+    if save_chart:
         fig = plot_backtest(result)
-        if save_html:
-            save_html_fn(fig, save_html)
-            console.print(f'[green]Chart saved → {save_html}[/]')
-        else:
-            dest = save_chart(fig, settings.primary_symbol, label='backtest')
-            console.print(f'[green]Chart saved → {dest}[/]')
+        dest = save_chart_fn(fig, settings.primary_symbol, label='backtest')
+        console.print(f'[green]Chart saved → {dest}[/]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -78,6 +78,14 @@ class Settings(BaseSettings):
         description='Suffix appended to symbol names when calling the MT5 API (e.g. "m" → EURUSDm). Set to "" to disable.',
     )
 
+    # --- Backtest output ---
+    backtest_save_chart: bool = Field(
+        default=True, description='Save HTML chart after a backtest run'
+    )
+    backtest_save_csv: bool = Field(
+        default=True, description='Save trades CSV after a backtest run'
+    )
+
     # --- Discord ---
     discord_webhook_url: str | None = Field(
         default=None, description='Discord webhook URL for alerts'
