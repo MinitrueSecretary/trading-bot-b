@@ -10,6 +10,7 @@ import pandas as pd
 
 from trading_bot.strategies.base_strategy import BaseStrategy, SignalType
 from trading_bot.utils.logger import get_logger
+from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager
 from trading_bot.utils.pip import get_pip_size
 
 logger = get_logger(__name__)
@@ -135,12 +136,13 @@ class Backtester:
         lot_size: float = 0.1,
         commission_per_lot: float = 0.0,
         slippage_pips: float = 1.0,
+        lot_size_manager: BaseLotSizeManager | None = None,
     ) -> None:
         self._strategy = strategy
         self._initial_balance = initial_balance
-        self._lot_size = lot_size
         self._commission = commission_per_lot
         self._slippage = slippage_pips
+        self._lot_size_manager = lot_size_manager or FixedLotSizeManager(lot_size)
 
     def run(self, df: pd.DataFrame, symbol: str) -> BacktestResult:
         """Execute the backtest over *df*.
@@ -231,7 +233,9 @@ class Backtester:
                         'entry_price': fill_price,
                         'stop_loss': signal.stop_loss,
                         'take_profit': signal.take_profit,
-                        'volume': self._lot_size,
+                        'volume': self._lot_size_manager.get_lot_size(
+                            balance, fill_price, symbol, signal.stop_loss
+                        ),
                         'entry_index': df.index[i + 1],
                         'reason': signal.reason,
                     }

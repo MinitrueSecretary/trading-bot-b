@@ -6,7 +6,7 @@ import pandas_ta as ta  # type: ignore[import]
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
-from trading_bot.utils.pip import get_pip_size
+from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
 
 logger = get_logger(__name__)
 
@@ -24,12 +24,18 @@ class RSIStrategy(BaseStrategy):
 
     _TREND_PERIOD = 200
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        tpsl_manager: BaseTPSLManager | None = None,
+    ) -> None:
         self._period = settings.rsi_period
         self._overbought = settings.rsi_overbought
         self._oversold = settings.rsi_oversold
-        self._sl_pips = settings.stop_loss_pips
-        self._tp_pips = settings.take_profit_pips
+        self._tpsl = tpsl_manager or FixedPipsTPSLManager(
+            sl_pips=settings.stop_loss_pips,
+            tp_pips=settings.take_profit_pips,
+        )
 
     @property
     def name(self) -> str:
@@ -72,12 +78,11 @@ class RSIStrategy(BaseStrategy):
         rsi_curr = float(df['rsi'].iloc[-1])
         sma200 = float(df['sma200'].iloc[-1])
 
-        pip_size = get_pip_size(symbol)
         uptrend = price > sma200
 
         if rsi_prev <= self._oversold and rsi_curr > self._oversold and uptrend:
-            sl = price - self._sl_pips * pip_size
-            tp = price + self._tp_pips * pip_size
+            sl = self._tpsl.calculate_sl(SignalType.BUY, price, symbol)
+            tp = self._tpsl.calculate_tp(SignalType.BUY, price, symbol)
             reason = (
                 f'RSI crossed above oversold ({self._oversold}): '
                 f'{rsi_prev:.1f} → {rsi_curr:.1f} | price > SMA200={sma200:.5f}'
@@ -95,8 +100,8 @@ class RSIStrategy(BaseStrategy):
             )
 
         if rsi_prev >= self._overbought and rsi_curr < self._overbought and not uptrend:
-            sl = price + self._sl_pips * pip_size
-            tp = price - self._tp_pips * pip_size
+            sl = self._tpsl.calculate_sl(SignalType.SELL, price, symbol)
+            tp = self._tpsl.calculate_tp(SignalType.SELL, price, symbol)
             reason = (
                 f'RSI crossed below overbought ({self._overbought}): '
                 f'{rsi_prev:.1f} → {rsi_curr:.1f} | price < SMA200={sma200:.5f}'

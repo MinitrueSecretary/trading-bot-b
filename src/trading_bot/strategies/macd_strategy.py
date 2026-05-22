@@ -6,7 +6,7 @@ import pandas_ta as ta  # type: ignore[import]
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
-from trading_bot.utils.pip import get_pip_size
+from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
 
 logger = get_logger(__name__)
 
@@ -23,12 +23,18 @@ class MACDStrategy(BaseStrategy):
             ``macd_signal``, ``stop_loss_pips``, ``take_profit_pips``.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        tpsl_manager: BaseTPSLManager | None = None,
+    ) -> None:
         self._fast = settings.macd_fast
         self._slow = settings.macd_slow
         self._signal = settings.macd_signal
-        self._sl_pips = settings.stop_loss_pips
-        self._tp_pips = settings.take_profit_pips
+        self._tpsl = tpsl_manager or FixedPipsTPSLManager(
+            sl_pips=settings.stop_loss_pips,
+            tp_pips=settings.take_profit_pips,
+        )
 
     @property
     def name(self) -> str:
@@ -81,11 +87,9 @@ class MACDStrategy(BaseStrategy):
         hist_curr = float(df['macd_hist'].iloc[-1])
         macd_curr = float(df['macd_line'].iloc[-1])
 
-        pip_size = get_pip_size(symbol)
-
         if hist_prev < 0 and hist_curr >= 0:
-            sl = price - self._sl_pips * pip_size
-            tp = price + self._tp_pips * pip_size
+            sl = self._tpsl.calculate_sl(SignalType.BUY, price, symbol)
+            tp = self._tpsl.calculate_tp(SignalType.BUY, price, symbol)
             reason = (
                 f'MACD histogram zero-cross bullish: {hist_prev:.6f} → {hist_curr:.6f} '
                 f'| MACD={macd_curr:.6f}'
@@ -103,8 +107,8 @@ class MACDStrategy(BaseStrategy):
             )
 
         if hist_prev > 0 and hist_curr <= 0:
-            sl = price + self._sl_pips * pip_size
-            tp = price - self._tp_pips * pip_size
+            sl = self._tpsl.calculate_sl(SignalType.SELL, price, symbol)
+            tp = self._tpsl.calculate_tp(SignalType.SELL, price, symbol)
             reason = (
                 f'MACD histogram zero-cross bearish: {hist_prev:.6f} → {hist_curr:.6f} '
                 f'| MACD={macd_curr:.6f}'

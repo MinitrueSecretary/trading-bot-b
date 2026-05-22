@@ -6,7 +6,7 @@ import pandas_ta as ta  # type: ignore[import]
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
-from trading_bot.utils.pip import get_pip_size
+from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
 
 logger = get_logger(__name__)
 
@@ -22,11 +22,17 @@ class SMACrossoverStrategy(BaseStrategy):
             ``stop_loss_pips``, and ``take_profit_pips``.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        tpsl_manager: BaseTPSLManager | None = None,
+    ) -> None:
         self._fast = settings.sma_fast
         self._slow = settings.sma_slow
-        self._sl_pips = settings.stop_loss_pips
-        self._tp_pips = settings.take_profit_pips
+        self._tpsl = tpsl_manager or FixedPipsTPSLManager(
+            sl_pips=settings.stop_loss_pips,
+            tp_pips=settings.take_profit_pips,
+        )
 
     @property
     def name(self) -> str:
@@ -73,12 +79,10 @@ class SMACrossoverStrategy(BaseStrategy):
         curr_slow = df[slow_col].iloc[-1]
         price = float(df['close'].iloc[-1])
 
-        pip_size = get_pip_size(symbol)
-
         if prev_fast <= prev_slow and curr_fast > curr_slow:
             # Golden cross — bullish
-            sl = price - self._sl_pips * pip_size
-            tp = price + self._tp_pips * pip_size
+            sl = self._tpsl.calculate_sl(SignalType.BUY, price, symbol)
+            tp = self._tpsl.calculate_tp(SignalType.BUY, price, symbol)
             reason = (
                 f'Golden cross: SMA{self._fast}={curr_fast:.5f} > SMA{self._slow}={curr_slow:.5f}'
             )
@@ -96,8 +100,8 @@ class SMACrossoverStrategy(BaseStrategy):
 
         if prev_fast >= prev_slow and curr_fast < curr_slow:
             # Death cross — bearish
-            sl = price + self._sl_pips * pip_size
-            tp = price - self._tp_pips * pip_size
+            sl = self._tpsl.calculate_sl(SignalType.SELL, price, symbol)
+            tp = self._tpsl.calculate_tp(SignalType.SELL, price, symbol)
             reason = (
                 f'Death cross: SMA{self._fast}={curr_fast:.5f} < SMA{self._slow}={curr_slow:.5f}'
             )
