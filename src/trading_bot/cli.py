@@ -110,7 +110,7 @@ def analyse(symbol: str | None, bars: int, chart: bool) -> None:
     """Fetch live data, generate a signal, and optionally show a chart."""
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
-    from trading_bot.visualization.charts import plot_ohlcv, show
+    from trading_bot.visualization.charts import plot_ohlcv, save_chart
 
     settings = get_settings()
     if symbol:
@@ -155,7 +155,8 @@ def analyse(symbol: str | None, bars: int, chart: bool) -> None:
             show_rsi=True,
             show_volume=True,
         )
-        show(fig)
+        dest = save_chart(fig, settings.primary_symbol, label='analyse')
+        console.print(f'[green]Chart saved → {dest}[/]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
