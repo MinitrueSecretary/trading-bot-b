@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -124,8 +127,9 @@ def plot_ohlcv(
 
     # ── Volume ────────────────────────────────────────────────────────────
     if show_volume:
-        colors = ['#26a69a' if c >= o else '#ef5350'
-                  for c, o in zip(df['close'], df['open'], strict=True)]
+        colors = [
+            '#26a69a' if c >= o else '#ef5350' for c, o in zip(df['close'], df['open'], strict=True)
+        ]
         fig.add_trace(
             go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors),
             row=current_row,
@@ -137,7 +141,9 @@ def plot_ohlcv(
     if show_rsi:
         rsi_vals = ta.rsi(df['close'], length=14)
         fig.add_trace(
-            go.Scatter(x=df.index, y=rsi_vals, name='RSI(14)', line={'color': '#e67e22', 'width': 1.5}),
+            go.Scatter(
+                x=df.index, y=rsi_vals, name='RSI(14)', line={'color': '#e67e22', 'width': 1.5}
+            ),
             row=current_row,
             col=1,
         )
@@ -254,3 +260,36 @@ def save_html(fig: go.Figure, path: str) -> None:
         path: Output file path (e.g. ``'chart.html'``).
     """
     fig.write_html(path)
+
+
+def save_chart(
+    fig: go.Figure,
+    symbol: str,
+    label: str = 'chart',
+    output_dir: str | Path = 'charts',
+) -> Path:
+    """Save *fig* as an HTML file inside *output_dir* and return the path.
+
+    The filename is built as ``{symbol}_{label}_{UTC-timestamp}.html`` so
+    successive runs never overwrite each other.  The directory is created
+    automatically if it does not exist.
+
+    Args:
+        fig: Plotly figure to save.
+        symbol: Instrument name used in the filename (e.g. ``'EURUSD'``).
+        label: Short tag describing the chart type (e.g. ``'analyse'``).
+        output_dir: Folder to write into (default: ``charts/`` relative to cwd).
+
+    Returns:
+        :class:`~pathlib.Path` of the saved file.
+    """
+    folder = Path(output_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')
+    safe_symbol = re.sub(r'[^\w]', '_', symbol)
+    filename = f'{safe_symbol}_{label}_{ts}.html'
+    dest = folder / filename
+
+    fig.write_html(str(dest))
+    return dest

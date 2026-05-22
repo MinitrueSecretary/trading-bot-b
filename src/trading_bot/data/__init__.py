@@ -21,6 +21,7 @@ def get_data_provider(settings: Settings) -> BaseDataProvider:
     """
     if sys.platform == 'win32':
         from trading_bot.data.mt5_provider import MT5Provider
+
         return MT5Provider(settings)
     return YFinanceProvider()
 

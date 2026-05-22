@@ -62,7 +62,9 @@ class RSIStrategy(BaseStrategy):
         df.dropna(inplace=True)
 
         if len(df) < 2:
-            return Signal(SignalType.HOLD, symbol, 0.0, reason='Not enough data after indicator calculation')
+            return Signal(
+                SignalType.HOLD, symbol, 0.0, reason='Not enough data after indicator calculation'
+            )
 
         price = float(df['close'].iloc[-1])
         rsi_prev = float(df['rsi'].iloc[-2])

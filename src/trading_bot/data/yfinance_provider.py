@@ -16,7 +16,7 @@ _TF_MAP: dict[Timeframe, str] = {
     Timeframe.M15: '15m',
     Timeframe.M30: '30m',
     Timeframe.H1: '1h',
-    Timeframe.H4: '1h',   # yfinance has no 4h; caller should aggregate
+    Timeframe.H4: '1h',  # yfinance has no 4h; caller should aggregate
     Timeframe.D1: '1d',
     Timeframe.W1: '1wk',
 }

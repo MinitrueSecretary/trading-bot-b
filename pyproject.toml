@@ -45,6 +45,9 @@ packages = ["src/trading_bot"]
 line-length = 100
 src = ["src"]
 
+[tool.ruff.format]
+quote-style = "single"
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]

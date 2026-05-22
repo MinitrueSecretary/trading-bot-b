@@ -132,7 +132,7 @@ class Backtester:
         )
 
         for i in range(required, len(df) - 1):
-            window = df.iloc[:i + 1]
+            window = df.iloc[: i + 1]
             current_bar = df.iloc[i]
             next_bar = df.iloc[i + 1]  # entry at next bar open
 
@@ -283,11 +283,7 @@ class Backtester:
 
         # Sharpe ratio (annualised, zero risk-free rate)
         returns = equity_series.pct_change().dropna()
-        sharpe = (
-            float(returns.mean() / returns.std() * np.sqrt(252))
-            if returns.std() > 0
-            else 0.0
-        )
+        sharpe = float(returns.mean() / returns.std() * np.sqrt(252)) if returns.std() > 0 else 0.0
 
         return BacktestResult(
             symbol=symbol,

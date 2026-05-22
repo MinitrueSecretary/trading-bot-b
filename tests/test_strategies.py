@@ -12,6 +12,7 @@ from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
 
 # ─── SMA Crossover ────────────────────────────────────────────────────────────
 
+
 class TestSMACrossoverStrategy:
     """Tests for :class:`SMACrossoverStrategy`."""
 
@@ -59,7 +60,9 @@ class TestSMACrossoverStrategy:
         # With a rapid uptrend at the end, we expect BUY or HOLD
         assert signal.signal_type in {SignalType.BUY, SignalType.HOLD}
 
-    def test_signal_has_sl_and_tp(self, strategy: SMACrossoverStrategy, ohlcv_df: pd.DataFrame) -> None:
+    def test_signal_has_sl_and_tp(
+        self, strategy: SMACrossoverStrategy, ohlcv_df: pd.DataFrame
+    ) -> None:
         """Any actionable signal should have non-zero SL and TP."""
         signal = strategy.generate_signal(ohlcv_df, 'EURUSD')
         if signal.is_actionable:
@@ -72,6 +75,7 @@ class TestSMACrossoverStrategy:
 
 
 # ─── RSI Strategy ─────────────────────────────────────────────────────────────
+
 
 class TestRSIStrategy:
     """Tests for :class:`RSIStrategy`."""
@@ -119,6 +123,7 @@ class TestRSIStrategy:
 
 
 # ─── MACD Strategy ────────────────────────────────────────────────────────────
+
 
 class TestMACDStrategy:
     """Tests for :class:`MACDStrategy`."""

@@ -144,16 +144,18 @@ class PaperExecutor(BaseExecutor):
             )
 
         self._balance += pos.pnl
-        self._closed_trades.append({
-            'order_id': pos.order_id,
-            'symbol': pos.symbol,
-            'direction': pos.signal_type.value,
-            'open_price': pos.open_price,
-            'volume': pos.volume,
-            'pnl': pos.pnl,
-            'opened_at': pos.opened_at,
-            'closed_at': datetime.now(UTC),
-        })
+        self._closed_trades.append(
+            {
+                'order_id': pos.order_id,
+                'symbol': pos.symbol,
+                'direction': pos.signal_type.value,
+                'open_price': pos.open_price,
+                'volume': pos.volume,
+                'pnl': pos.pnl,
+                'opened_at': pos.opened_at,
+                'closed_at': datetime.now(UTC),
+            }
+        )
 
         return OrderResult(
             success=True,

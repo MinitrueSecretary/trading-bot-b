@@ -31,9 +31,7 @@ class TestBacktester:
         assert result.symbol == 'EURUSD'
         assert result.strategy_name == 'sma_crossover'
 
-    def test_trade_count_non_negative(
-        self, backtester: Backtester, ohlcv_df: pd.DataFrame
-    ) -> None:
+    def test_trade_count_non_negative(self, backtester: Backtester, ohlcv_df: pd.DataFrame) -> None:
         """Total trades should be non-negative."""
         result = backtester.run(ohlcv_df, 'EURUSD')
         assert result.total_trades >= 0

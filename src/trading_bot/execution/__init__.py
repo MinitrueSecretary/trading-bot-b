@@ -21,6 +21,7 @@ def get_executor(settings: Settings) -> BaseExecutor:
         A concrete :class:`BaseExecutor`.
     """
     from trading_bot.utils.logger import get_logger
+
     logger = get_logger(__name__)
 
     if settings.dry_run:
@@ -29,6 +30,7 @@ def get_executor(settings: Settings) -> BaseExecutor:
 
     if sys.platform == 'win32':
         from trading_bot.execution.mt5_executor import MT5Executor
+
         logger.info('[Executor] Windows detected + dry_run=False — using MT5Executor')
         return MT5Executor(settings)
 
