@@ -6,7 +6,6 @@ import pandas_ta as ta  # type: ignore[import]
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
-from trading_bot.utils.pip import get_pip_size
 
 logger = get_logger(__name__)
 
@@ -81,7 +80,7 @@ class MACDStrategy(BaseStrategy):
         hist_curr = float(df['macd_hist'].iloc[-1])
         macd_curr = float(df['macd_line'].iloc[-1])
 
-        pip_size = get_pip_size(symbol)
+        pip_size = 0.01 if 'JPY' in symbol else 0.0001
 
         if hist_prev < 0 and hist_curr >= 0:
             sl = price - self._sl_pips * pip_size
