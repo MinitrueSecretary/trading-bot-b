@@ -59,8 +59,7 @@ def backtest(
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
-    from trading_bot.visualization.charts import plot_backtest, show
-    from trading_bot.visualization.charts import save_html as save_html_fn
+    from trading_bot.visualization.charts import plot_backtest, save_chart, save_html as save_html_fn
 
     settings = get_settings()
     if symbol:
@@ -94,7 +93,8 @@ def backtest(
             save_html_fn(fig, save_html)
             console.print(f'[green]Chart saved → {save_html}[/]')
         else:
-            show(fig)
+            dest = save_chart(fig, settings.primary_symbol, label='backtest')
+            console.print(f'[green]Chart saved → {dest}[/]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
