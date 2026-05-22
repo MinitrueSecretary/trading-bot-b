@@ -6,7 +6,6 @@ import pandas_ta as ta  # type: ignore[import]
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
-from trading_bot.utils.pip import get_pip_size
 
 logger = get_logger(__name__)
 
@@ -73,7 +72,8 @@ class SMACrossoverStrategy(BaseStrategy):
         curr_slow = df[slow_col].iloc[-1]
         price = float(df['close'].iloc[-1])
 
-        pip_size = get_pip_size(symbol)
+        # Calculate pip value (assume 4-decimal pairs; JPY pairs use 2)
+        pip_size = 0.01 if 'JPY' in symbol else 0.0001
 
         if prev_fast <= prev_slow and curr_fast > curr_slow:
             # Golden cross — bullish
