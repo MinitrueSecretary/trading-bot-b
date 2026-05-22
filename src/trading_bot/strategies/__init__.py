@@ -28,9 +28,7 @@ def get_strategy(settings: Settings) -> BaseStrategy:
     cls = _REGISTRY.get(settings.strategy_name)
     if cls is None:
         valid = ', '.join(_REGISTRY.keys())
-        raise ValueError(
-            f'Unknown strategy {settings.strategy_name!r}. Valid options: {valid}'
-        )
+        raise ValueError(f'Unknown strategy {settings.strategy_name!r}. Valid options: {valid}')
     return cls(settings)
 
 

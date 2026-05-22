@@ -27,8 +27,8 @@ class MT5Executor(BaseExecutor):
     """
 
     # MT5 order type constants (defined here to avoid import at module level)
-    _ORDER_TYPE_BUY = 0    # mt5.ORDER_TYPE_BUY
-    _ORDER_TYPE_SELL = 1   # mt5.ORDER_TYPE_SELL
+    _ORDER_TYPE_BUY = 0  # mt5.ORDER_TYPE_BUY
+    _ORDER_TYPE_SELL = 1  # mt5.ORDER_TYPE_SELL
     _TRADE_ACTION_DEAL = 1  # mt5.TRADE_ACTION_DEAL
     _ORDER_FILLING_IOC = 1  # mt5.ORDER_FILLING_IOC
 
@@ -46,6 +46,7 @@ class MT5Executor(BaseExecutor):
             raise RuntimeError('MT5Executor is only available on Windows.')
         try:
             import MetaTrader5 as mt5  # type: ignore[import]  # noqa: N813
+
             self._mt5 = mt5
         except ImportError as exc:
             raise RuntimeError('MetaTrader5 package not installed.') from exc
@@ -82,14 +83,13 @@ class MT5Executor(BaseExecutor):
 
         mt5 = self._mt5
         order_type = (
-            self._ORDER_TYPE_BUY
-            if signal.signal_type == SignalType.BUY
-            else self._ORDER_TYPE_SELL
+            self._ORDER_TYPE_BUY if signal.signal_type == SignalType.BUY else self._ORDER_TYPE_SELL
         )
+        mt5_symbol = self._settings.mt5_symbol_for(signal.symbol)
 
         request: dict[str, object] = {
             'action': self._TRADE_ACTION_DEAL,
-            'symbol': signal.symbol,
+            'symbol': mt5_symbol,
             'volume': volume,
             'type': order_type,
             'price': signal.entry_price,
@@ -171,12 +171,13 @@ class MT5Executor(BaseExecutor):
         pos = positions[0]
         # To close: flip the order type
         close_type = self._ORDER_TYPE_SELL if pos.type == 0 else self._ORDER_TYPE_BUY
-        tick = mt5.symbol_info_tick(symbol)  # type: ignore[union-attr]
+        mt5_symbol = self._settings.mt5_symbol_for(symbol)
+        tick = mt5.symbol_info_tick(mt5_symbol)  # type: ignore[union-attr]
         close_price = float(tick.bid if close_type == self._ORDER_TYPE_SELL else tick.ask)
 
         request: dict[str, object] = {
             'action': self._TRADE_ACTION_DEAL,
-            'symbol': symbol,
+            'symbol': mt5_symbol,
             'volume': float(pos.volume),
             'type': close_type,
             'position': ticket,

@@ -124,8 +124,9 @@ def plot_ohlcv(
 
     # ── Volume ────────────────────────────────────────────────────────────
     if show_volume:
-        colors = ['#26a69a' if c >= o else '#ef5350'
-                  for c, o in zip(df['close'], df['open'], strict=True)]
+        colors = [
+            '#26a69a' if c >= o else '#ef5350' for c, o in zip(df['close'], df['open'], strict=True)
+        ]
         fig.add_trace(
             go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors),
             row=current_row,
@@ -137,7 +138,9 @@ def plot_ohlcv(
     if show_rsi:
         rsi_vals = ta.rsi(df['close'], length=14)
         fig.add_trace(
-            go.Scatter(x=df.index, y=rsi_vals, name='RSI(14)', line={'color': '#e67e22', 'width': 1.5}),
+            go.Scatter(
+                x=df.index, y=rsi_vals, name='RSI(14)', line={'color': '#e67e22', 'width': 1.5}
+            ),
             row=current_row,
             col=1,
         )

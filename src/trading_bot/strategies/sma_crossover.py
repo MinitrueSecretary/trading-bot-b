@@ -59,7 +59,9 @@ class SMACrossoverStrategy(BaseStrategy):
         df.dropna(inplace=True)
 
         if len(df) < 2:
-            return Signal(SignalType.HOLD, symbol, 0.0, reason='Not enough data after SMA calculation')
+            return Signal(
+                SignalType.HOLD, symbol, 0.0, reason='Not enough data after SMA calculation'
+            )
 
         fast_col = f'sma_{self._fast}'
         slow_col = f'sma_{self._slow}'
