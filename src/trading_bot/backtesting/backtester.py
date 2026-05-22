@@ -10,6 +10,7 @@ import pandas as pd
 
 from trading_bot.strategies.base_strategy import BaseStrategy, SignalType
 from trading_bot.utils.logger import get_logger
+from trading_bot.utils.pip import get_pip_size
 
 logger = get_logger(__name__)
 
@@ -152,7 +153,7 @@ class Backtester:
             A :class:`BacktestResult` with full statistics.
         """
         required = self._strategy.required_bars()
-        pip_size = 0.01 if 'JPY' in symbol else 0.0001
+        pip_size = get_pip_size(symbol)
 
         balance = self._initial_balance
         equity_values: list[float] = [balance]
