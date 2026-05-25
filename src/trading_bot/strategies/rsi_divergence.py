@@ -17,20 +17,28 @@ def _swing_lows(series: npt.NDArray[np.float64], window: int) -> list[int]:
     """Return indices of confirmed swing lows in *series*.
 
     A bar at index *i* is a swing low when its value is strictly less than
-    every bar within ``window`` positions on both sides.
+    every bar within ``window`` positions to the left **and** all available
+    bars to the right (up to ``window``).  Bars near the right edge use
+    however many bars exist rather than requiring a full ``window``, so
+    pivots can be detected all the way up to the final bar.
 
     Args:
         series: 1-D array of values to scan.
-        window: Number of bars required on each side of a candidate pivot.
+        window: Number of bars required to the left; right side uses
+            ``min(window, available)`` bars.
 
     Returns:
         Sorted list of integer indices that are confirmed swing lows.
     """
     indices: list[int] = []
-    for i in range(window, len(series) - window):
+    n = len(series)
+    # Stop at n-2: the last bar (n-1) is excluded because it may be an
+    # unfinished candle and cannot yet be confirmed as a local minimum.
+    for i in range(window, n - 1):
         val = series[i]
+        right = min(window, n - 1 - i)
         if all(val < series[i - j] for j in range(1, window + 1)) and all(
-            val < series[i + j] for j in range(1, window + 1)
+            val < series[i + j] for j in range(1, right + 1)
         ):
             indices.append(i)
     return indices
@@ -40,20 +48,26 @@ def _swing_highs(series: npt.NDArray[np.float64], window: int) -> list[int]:
     """Return indices of confirmed swing highs in *series*.
 
     A bar at index *i* is a swing high when its value is strictly greater
-    than every bar within ``window`` positions on both sides.
+    than every bar within ``window`` positions to the left **and** all
+    available bars to the right (up to ``window``).  The last bar (*n-1*)
+    is excluded as it may be an unfinished candle.
 
     Args:
         series: 1-D array of values to scan.
-        window: Number of bars required on each side of a candidate pivot.
+        window: Number of bars required to the left; right side uses
+            ``min(window, available)`` bars.
 
     Returns:
         Sorted list of integer indices that are confirmed swing highs.
     """
     indices: list[int] = []
-    for i in range(window, len(series) - window):
+    n = len(series)
+    # Stop at n-2 for the same reason as _swing_lows.
+    for i in range(window, n - 1):
         val = series[i]
+        right = min(window, n - 1 - i)
         if all(val > series[i - j] for j in range(1, window + 1)) and all(
-            val > series[i + j] for j in range(1, window + 1)
+            val > series[i + j] for j in range(1, right + 1)
         ):
             indices.append(i)
     return indices
@@ -171,13 +185,20 @@ class RSIDivergenceStrategy(BaseStrategy):
         low_idx = _swing_lows(price_lows, self._swing_window)
         high_idx = _swing_highs(price_highs, self._swing_window)
 
+        # Freshness filter: P2 must be one of the last 3 *complete* candles.
+        # Bar n-1 is excluded from pivot detection (unfinished candle), so the
+        # newest possible pivot is n-2.  "Within 3" therefore means index ≥ n-4.
+        freshness_min = len(price_lows) - 4
+        low_fresh = len(low_idx) >= 2 and low_idx[-1] >= freshness_min
+        high_fresh = len(high_idx) >= 2 and high_idx[-1] >= freshness_min
+
         base_metadata: dict[str, object] = {
             'stochrsi_k': round(stochrsi_k_curr, 4),
             'stochrsi_d': round(stochrsi_d_curr, 4),
         }
 
-        # ── Lows-based divergence checks (need ≥ 2 swing lows) ──────────────
-        if len(low_idx) >= 2:
+        # ── Lows-based divergence checks (need ≥ 2 fresh swing lows) ─────────
+        if low_fresh:
             i1, i2 = low_idx[-2], low_idx[-1]  # i1 older, i2 newer
             p1_low, p2_low = float(price_lows[i1]), float(price_lows[i2])
             r1_low, r2_low = float(rsi_k[i1]), float(rsi_k[i2])
@@ -210,8 +231,8 @@ class RSIDivergenceStrategy(BaseStrategy):
                     },
                 )
 
-        # ── Highs-based divergence checks (need ≥ 2 swing highs) ────────────
-        if len(high_idx) >= 2:
+        # ── Highs-based divergence checks (need ≥ 2 fresh swing highs) ─────
+        if high_fresh:
             i1, i2 = high_idx[-2], high_idx[-1]
             p1_high, p2_high = float(price_highs[i1]), float(price_highs[i2])
             r1_high, r2_high = float(rsi_k[i1]), float(rsi_k[i2])
@@ -247,7 +268,7 @@ class RSIDivergenceStrategy(BaseStrategy):
                 )
 
         # ── Hidden divergences (lower priority) ─────────────────────────────
-        if len(low_idx) >= 2:
+        if low_fresh:
             i1, i2 = low_idx[-2], low_idx[-1]
             p1_low, p2_low = float(price_lows[i1]), float(price_lows[i2])
             r1_low, r2_low = float(rsi_k[i1]), float(rsi_k[i2])
@@ -280,7 +301,7 @@ class RSIDivergenceStrategy(BaseStrategy):
                     },
                 )
 
-        if len(high_idx) >= 2:
+        if high_fresh:
             i1, i2 = high_idx[-2], high_idx[-1]
             p1_high, p2_high = float(price_highs[i1]), float(price_highs[i2])
             r1_high, r2_high = float(rsi_k[i1]), float(rsi_k[i2])
@@ -315,12 +336,15 @@ class RSIDivergenceStrategy(BaseStrategy):
                     },
                 )
 
+        stale_note = ''
+        if (len(low_idx) >= 2 and not low_fresh) or (len(high_idx) >= 2 and not high_fresh):
+            stale_note = ' (pivots found but P2 not within last 3 candles)'
         return Signal(
             SignalType.HOLD,
             symbol,
             price,
             reason=(
-                f'No divergence detected | '
+                f'No divergence detected{stale_note} | '
                 f'swing_lows={len(low_idx)} swing_highs={len(high_idx)} '
                 f'StochRSI-K={stochrsi_k_curr:.1f}'
             ),
