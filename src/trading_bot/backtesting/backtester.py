@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -86,7 +86,7 @@ class BacktestResult:
         else:
             folder = Path(output_dir)
             folder.mkdir(parents=True, exist_ok=True)
-            ts = datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')
+            ts = datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')
             safe_symbol = re.sub(r'[^\w]', '_', self.symbol)
             dest = folder / f'{safe_symbol}_{self.strategy_name}_{ts}.csv'
 
