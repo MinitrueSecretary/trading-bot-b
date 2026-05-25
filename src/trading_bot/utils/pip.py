@@ -4,10 +4,10 @@
 # Add new entries here to extend support without touching strategy code.
 _CRYPTO_PREFIXES: tuple[str, ...] = ('BTC', 'ETH', 'LTC', 'XRP', 'BNB', 'SOL', 'ADA', 'DOGE')
 _METAL_PIP: dict[str, float] = {
-    'XAU': 0.01,   # Gold  — quoted to 2 d.p. (~$0.01 moves)
+    'XAU': 0.01,  # Gold  — quoted to 2 d.p. (~$0.01 moves)
     'XAG': 0.001,  # Silver — quoted to 3 d.p. (~$0.001 moves)
-    'XPT': 0.01,   # Platinum
-    'XPD': 0.01,   # Palladium
+    'XPT': 0.01,  # Platinum
+    'XPD': 0.01,  # Palladium
 }
 
 

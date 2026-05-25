@@ -23,9 +23,23 @@ def main() -> None:
 @main.command()
 @click.option('--dry-run/--live', default=None, help='Override dry_run setting.')
 @click.option('--strategy', default=None, help='Strategy name (overrides config).')
-@click.option('--sl-pips', 'sl_pips', default=None, type=float, help='Stop-loss distance in pips (overrides BOT_STOP_LOSS_PIPS).')
-@click.option('--tp-pips', 'tp_pips', default=None, type=float, help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).')
-def trade(dry_run: bool | None, strategy: str | None, sl_pips: float | None, tp_pips: float | None) -> None:
+@click.option(
+    '--sl-pips',
+    'sl_pips',
+    default=None,
+    type=float,
+    help='Stop-loss distance in pips (overrides BOT_STOP_LOSS_PIPS).',
+)
+@click.option(
+    '--tp-pips',
+    'tp_pips',
+    default=None,
+    type=float,
+    help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).',
+)
+def trade(
+    dry_run: bool | None, strategy: str | None, sl_pips: float | None, tp_pips: float | None
+) -> None:
     """Start the live / paper trading loop."""
     from trading_bot.bot import TradingBot
 
@@ -107,8 +121,13 @@ def backtest(
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
-    from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager, FixedRiskLotSizeManager
-    from trading_bot.visualization.charts import plot_backtest, save_chart as save_chart_fn
+    from trading_bot.utils.lot_size import (
+        BaseLotSizeManager,
+        FixedLotSizeManager,
+        FixedRiskLotSizeManager,
+    )
+    from trading_bot.visualization.charts import plot_backtest
+    from trading_bot.visualization.charts import save_chart as save_chart_fn
 
     if lot_size is not None and risk_amount is not None:
         raise click.UsageError('--lot-size and --risk-amount are mutually exclusive.')
@@ -133,7 +152,9 @@ def backtest(
     lot_mgr: BaseLotSizeManager | None = None
     if risk_amount is not None:
         lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
-        console.print(f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]')
+        console.print(
+            f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]'
+        )
     elif lot_size is not None:
         lot_mgr = FixedLotSizeManager(lot_size=lot_size)
         console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
@@ -177,9 +198,23 @@ def backtest(
 @click.option('--symbol', default=None, help='Symbol to analyse.')
 @click.option('--bars', default=300, show_default=True, help='Number of bars.')
 @click.option('--chart/--no-chart', default=True, show_default=True, help='Open chart.')
-@click.option('--sl-pips', 'sl_pips', default=None, type=float, help='Stop-loss distance in pips (overrides BOT_STOP_LOSS_PIPS).')
-@click.option('--tp-pips', 'tp_pips', default=None, type=float, help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).')
-def analyse(symbol: str | None, bars: int, chart: bool, sl_pips: float | None, tp_pips: float | None) -> None:
+@click.option(
+    '--sl-pips',
+    'sl_pips',
+    default=None,
+    type=float,
+    help='Stop-loss distance in pips (overrides BOT_STOP_LOSS_PIPS).',
+)
+@click.option(
+    '--tp-pips',
+    'tp_pips',
+    default=None,
+    type=float,
+    help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).',
+)
+def analyse(
+    symbol: str | None, bars: int, chart: bool, sl_pips: float | None, tp_pips: float | None
+) -> None:
     """Fetch live data, generate a signal, and optionally show a chart."""
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
