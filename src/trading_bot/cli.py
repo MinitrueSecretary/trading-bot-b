@@ -23,7 +23,9 @@ def main() -> None:
 @main.command()
 @click.option('--dry-run/--live', default=None, help='Override dry_run setting.')
 @click.option('--strategy', default=None, help='Strategy name (overrides config).')
-def trade(dry_run: bool | None, strategy: str | None) -> None:
+@click.option('--sl-pips', 'sl_pips', default=None, type=float, help='Stop-loss distance in pips (overrides BOT_STOP_LOSS_PIPS).')
+@click.option('--tp-pips', 'tp_pips', default=None, type=float, help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).')
+def trade(dry_run: bool | None, strategy: str | None, sl_pips: float | None, tp_pips: float | None) -> None:
     """Start the live / paper trading loop."""
     from trading_bot.bot import TradingBot
 
@@ -32,6 +34,10 @@ def trade(dry_run: bool | None, strategy: str | None) -> None:
         settings = settings.model_copy(update={'dry_run': dry_run})
     if strategy is not None:
         settings = settings.model_copy(update={'strategy_name': strategy})
+    if sl_pips is not None:
+        settings = settings.model_copy(update={'stop_loss_pips': sl_pips})
+    if tp_pips is not None:
+        settings = settings.model_copy(update={'take_profit_pips': tp_pips})
 
     bot = TradingBot(settings)
     bot.start()
@@ -58,30 +64,79 @@ def trade(dry_run: bool | None, strategy: str | None) -> None:
     default=None,
     help='Save trades DataFrame to CSV (default: BOT_BACKTEST_SAVE_CSV).',
 )
+@click.option(
+    '--sl-pips',
+    'sl_pips',
+    default=None,
+    type=float,
+    help='Stop-loss distance in pips for FixedPipsTPSLManager (overrides BOT_STOP_LOSS_PIPS).',
+)
+@click.option(
+    '--tp-pips',
+    'tp_pips',
+    default=None,
+    type=float,
+    help='Take-profit distance in pips for FixedPipsTPSLManager (overrides BOT_TAKE_PROFIT_PIPS).',
+)
+@click.option(
+    '--lot-size',
+    'lot_size',
+    default=None,
+    type=float,
+    help='Fixed lot size per trade (FixedLotSizeManager). Mutually exclusive with --risk-amount.',
+)
+@click.option(
+    '--risk-amount',
+    'risk_amount',
+    default=None,
+    type=float,
+    help='Fixed dollar amount at risk per trade (FixedRiskLotSizeManager). Mutually exclusive with --lot-size.',
+)
 def backtest(
     symbol: str | None,
     strategy: str | None,
     bars: int,
     save_chart: bool | None,
     save_csv: bool | None,
+    sl_pips: float | None,
+    tp_pips: float | None,
+    lot_size: float | None,
+    risk_amount: float | None,
 ) -> None:
     """Run a strategy backtest and print statistics."""
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
+    from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager, FixedRiskLotSizeManager
     from trading_bot.visualization.charts import plot_backtest, save_chart as save_chart_fn
+
+    if lot_size is not None and risk_amount is not None:
+        raise click.UsageError('--lot-size and --risk-amount are mutually exclusive.')
 
     settings = get_settings()
     if symbol:
         settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
     if strategy:
         settings = settings.model_copy(update={'strategy_name': strategy})
+    if sl_pips is not None:
+        settings = settings.model_copy(update={'stop_loss_pips': sl_pips})
+    if tp_pips is not None:
+        settings = settings.model_copy(update={'take_profit_pips': tp_pips})
 
     # Resolve flag defaults from settings / env
     if save_chart is None:
         save_chart = settings.backtest_save_chart
     if save_csv is None:
         save_csv = settings.backtest_save_csv
+
+    # Build lot size manager (None → Backtester uses its FixedLotSizeManager(0.1) default)
+    lot_mgr: BaseLotSizeManager | None = None
+    if risk_amount is not None:
+        lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
+        console.print(f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]')
+    elif lot_size is not None:
+        lot_mgr = FixedLotSizeManager(lot_size=lot_size)
+        console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
 
     provider = get_data_provider(settings)
     provider.connect()
@@ -98,7 +153,7 @@ def backtest(
     console.print(f'[green]Got {len(df)} bars ({df.index[0]} → {df.index[-1]})[/]')
 
     strat = get_strategy(settings)
-    bt = Backtester(strat)
+    bt = Backtester(strat, lot_size_manager=lot_mgr)
     result = bt.run(df, settings.primary_symbol)
 
     console.print(result.summary())
@@ -122,7 +177,9 @@ def backtest(
 @click.option('--symbol', default=None, help='Symbol to analyse.')
 @click.option('--bars', default=300, show_default=True, help='Number of bars.')
 @click.option('--chart/--no-chart', default=True, show_default=True, help='Open chart.')
-def analyse(symbol: str | None, bars: int, chart: bool) -> None:
+@click.option('--sl-pips', 'sl_pips', default=None, type=float, help='Stop-loss distance in pips (overrides BOT_STOP_LOSS_PIPS).')
+@click.option('--tp-pips', 'tp_pips', default=None, type=float, help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).')
+def analyse(symbol: str | None, bars: int, chart: bool, sl_pips: float | None, tp_pips: float | None) -> None:
     """Fetch live data, generate a signal, and optionally show a chart."""
     from trading_bot.data import get_data_provider
     from trading_bot.strategies import get_strategy
@@ -131,6 +188,10 @@ def analyse(symbol: str | None, bars: int, chart: bool) -> None:
     settings = get_settings()
     if symbol:
         settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
+    if sl_pips is not None:
+        settings = settings.model_copy(update={'stop_loss_pips': sl_pips})
+    if tp_pips is not None:
+        settings = settings.model_copy(update={'take_profit_pips': tp_pips})
 
     provider = get_data_provider(settings)
     provider.connect()
