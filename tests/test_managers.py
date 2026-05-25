@@ -7,7 +7,7 @@ import pytest
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import SignalType
 from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
-from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager
+from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager, FixedRiskLotSizeManager
 from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
 
 
@@ -270,3 +270,134 @@ class TestTPSLManagerInjection:
             wide_sl_dist = abs(wide_sig.entry_price - wide_sig.stop_loss)
             tight_sl_dist = abs(tight_sig.entry_price - tight_sig.stop_loss)
             assert wide_sl_dist > tight_sl_dist
+
+
+# ─── FixedRiskLotSizeManager ──────────────────────────────────────────────────
+
+
+class TestFixedRiskLotSizeManager:
+    """Tests for :class:`FixedRiskLotSizeManager`."""
+
+    @pytest.fixture
+    def mgr(self) -> FixedRiskLotSizeManager:
+        """Return a $100 risk, default contract_size manager."""
+        return FixedRiskLotSizeManager(risk_amount=100.0)
+
+    # ── Subclass contract ─────────────────────────────────────────────────────
+
+    def test_is_base_lot_size_manager(self, mgr: FixedRiskLotSizeManager) -> None:
+        """FixedRiskLotSizeManager must be a subclass of BaseLotSizeManager."""
+        assert isinstance(mgr, BaseLotSizeManager)
+
+    # ── Properties ────────────────────────────────────────────────────────────
+
+    def test_risk_amount_property(self, mgr: FixedRiskLotSizeManager) -> None:
+        """risk_amount property returns the configured value."""
+        assert mgr.risk_amount == 100.0
+
+    def test_contract_size_default(self, mgr: FixedRiskLotSizeManager) -> None:
+        """Default contract_size should be 100_000."""
+        assert mgr.contract_size == 100_000.0
+
+    def test_min_lot_default(self, mgr: FixedRiskLotSizeManager) -> None:
+        """Default min_lot should be 0.01."""
+        assert mgr.min_lot == 0.01
+
+    def test_custom_contract_size(self) -> None:
+        """A custom contract_size is stored correctly."""
+        mgr = FixedRiskLotSizeManager(risk_amount=50.0, contract_size=10_000.0)
+        assert mgr.contract_size == 10_000.0
+
+    def test_custom_min_lot(self) -> None:
+        """A custom min_lot is stored correctly."""
+        mgr = FixedRiskLotSizeManager(risk_amount=50.0, min_lot=0.1)
+        assert mgr.min_lot == 0.1
+
+    # ── Exact lot calculation ─────────────────────────────────────────────────
+
+    def test_exact_lot_eurusd_buy(self, mgr: FixedRiskLotSizeManager) -> None:
+        """EURUSD BUY: risk=$100, SL 30 pips away → lot = 100 / (0.003 * 100_000) = 0.33."""
+        lot = mgr.get_lot_size(10_000, 1.10000, 'EURUSD', stop_loss_price=1.09700)
+        assert lot == pytest.approx(0.33)
+
+    def test_exact_lot_eurusd_sell(self, mgr: FixedRiskLotSizeManager) -> None:
+        """SELL direction (SL above entry): same SL distance → same lot."""
+        lot = mgr.get_lot_size(10_000, 1.10000, 'EURUSD', stop_loss_price=1.10300)
+        assert lot == pytest.approx(0.33)
+
+    def test_wider_sl_gives_smaller_lot(self, mgr: FixedRiskLotSizeManager) -> None:
+        """A wider SL distance should produce a smaller lot size."""
+        tight_lot = mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.099)
+        wide_lot = mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.05)
+        assert tight_lot > wide_lot
+
+    def test_higher_risk_gives_larger_lot(self) -> None:
+        """Doubling risk_amount should roughly double the lot size."""
+        mgr_100 = FixedRiskLotSizeManager(risk_amount=100.0)
+        mgr_200 = FixedRiskLotSizeManager(risk_amount=200.0)
+        lot_100 = mgr_100.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.097)
+        lot_200 = mgr_200.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.097)
+        assert lot_200 == pytest.approx(lot_100 * 2, rel=0.05)
+
+    def test_balance_is_ignored(self, mgr: FixedRiskLotSizeManager) -> None:
+        """Balance does not affect the computed lot (risk is fixed, not % of balance)."""
+        lot_small = mgr.get_lot_size(1_000, 1.1, 'EURUSD', stop_loss_price=1.097)
+        lot_large = mgr.get_lot_size(1_000_000, 1.1, 'EURUSD', stop_loss_price=1.097)
+        assert lot_small == lot_large
+
+    def test_rounded_to_2_dp(self) -> None:
+        """Result should be rounded to exactly 2 decimal places."""
+        mgr = FixedRiskLotSizeManager(risk_amount=50.0)
+        lot = mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.097)
+        assert lot == round(lot, 2)
+
+    # ── Fallback to min_lot ───────────────────────────────────────────────────
+
+    def test_fallback_when_no_sl(self, mgr: FixedRiskLotSizeManager) -> None:
+        """stop_loss_price=0.0 should fall back to min_lot."""
+        assert mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=0.0) == mgr.min_lot
+
+    def test_fallback_when_sl_equals_entry(self, mgr: FixedRiskLotSizeManager) -> None:
+        """SL price equal to entry price (zero distance) falls back to min_lot."""
+        assert mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.1) == mgr.min_lot
+
+    def test_fallback_when_computed_lot_below_min(self) -> None:
+        """Computed lot below min_lot should be clamped up to min_lot."""
+        # risk=$1, SL 100 pips away → raw lot = 1 / (0.01 * 100_000) = 0.001 < 0.01
+        mgr = FixedRiskLotSizeManager(risk_amount=1.0, min_lot=0.01)
+        lot = mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.09)
+        assert lot == 0.01
+
+    def test_custom_min_lot_respected(self) -> None:
+        """A higher min_lot is returned when computed lot would be below it."""
+        mgr = FixedRiskLotSizeManager(risk_amount=1.0, min_lot=0.1)
+        lot = mgr.get_lot_size(10_000, 1.1, 'EURUSD', stop_loss_price=1.09)
+        assert lot == 0.1
+
+    # ── Validation ────────────────────────────────────────────────────────────
+
+    def test_raises_on_zero_risk_amount(self) -> None:
+        """risk_amount=0 should raise ValueError."""
+        with pytest.raises(ValueError, match='risk_amount'):
+            FixedRiskLotSizeManager(risk_amount=0)
+
+    def test_raises_on_negative_risk_amount(self) -> None:
+        """Negative risk_amount should raise ValueError."""
+        with pytest.raises(ValueError, match='risk_amount'):
+            FixedRiskLotSizeManager(risk_amount=-100)
+
+    def test_raises_on_zero_contract_size(self) -> None:
+        """contract_size=0 should raise ValueError."""
+        with pytest.raises(ValueError, match='contract_size'):
+            FixedRiskLotSizeManager(risk_amount=100, contract_size=0)
+
+    def test_raises_on_zero_min_lot(self) -> None:
+        """min_lot=0 should raise ValueError."""
+        with pytest.raises(ValueError, match='min_lot'):
+            FixedRiskLotSizeManager(risk_amount=100, min_lot=0)
+
+    # ── Return type ───────────────────────────────────────────────────────────
+
+    def test_returns_float(self, mgr: FixedRiskLotSizeManager) -> None:
+        """get_lot_size must always return a float."""
+        assert isinstance(mgr.get_lot_size(10_000, 1.1, 'EURUSD', 1.097), float)

@@ -1,6 +1,9 @@
 """Lot size manager base class and implementations."""
 
+import logging
 from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
 
 
 class BaseLotSizeManager(ABC):
@@ -79,3 +82,109 @@ class FixedLotSizeManager(BaseLotSizeManager):
             The configured fixed lot size.
         """
         return self._lot_size
+
+
+class FixedRiskLotSizeManager(BaseLotSizeManager):
+    """Sizes positions so a stop-loss hit loses a fixed dollar amount.
+
+    The lot size is calculated by working backwards from the desired dollar
+    risk and the distance to the stop-loss:
+
+        lot_size = risk_amount / (sl_distance * contract_size)
+
+    This matches the P&L formula used throughout the codebase
+    ``pnl = price_change * lot_size * contract_size``, so a stop-loss hit
+    will lose approximately *risk_amount* dollars.
+
+    When no stop-loss price is provided, or the computed lot would fall below
+    *min_lot*, the manager falls back to *min_lot* and logs a warning.
+
+    Args:
+        risk_amount: Fixed dollar amount to risk per trade (must be > 0).
+        contract_size: Units per lot — default ``100_000`` matches the value
+            used in the backtester and paper executor (must be > 0).
+        min_lot: Minimum returnable lot size (default ``0.01``, the smallest
+            standard MT5 lot step). Acts as a floor (must be > 0).
+
+    Raises:
+        ValueError: If any of *risk_amount*, *contract_size*, or *min_lot*
+            are not positive.
+
+    Examples:
+        >>> mgr = FixedRiskLotSizeManager(risk_amount=100.0)
+        >>> # EURUSD BUY with SL 30 pips away (0.003 price units)
+        >>> mgr.get_lot_size(10_000, 1.10000, 'EURUSD', stop_loss_price=1.09700)
+        0.33
+    """
+
+    def __init__(
+        self,
+        risk_amount: float,
+        contract_size: float = 100_000.0,
+        min_lot: float = 0.01,
+    ) -> None:
+        if risk_amount <= 0:
+            raise ValueError(f'risk_amount must be positive, got {risk_amount}')
+        if contract_size <= 0:
+            raise ValueError(f'contract_size must be positive, got {contract_size}')
+        if min_lot <= 0:
+            raise ValueError(f'min_lot must be positive, got {min_lot}')
+        self._risk_amount = risk_amount
+        self._contract_size = contract_size
+        self._min_lot = min_lot
+
+    @property
+    def risk_amount(self) -> float:
+        """Fixed dollar amount at risk per trade."""
+        return self._risk_amount
+
+    @property
+    def contract_size(self) -> float:
+        """Units per lot used in the P&L calculation."""
+        return self._contract_size
+
+    @property
+    def min_lot(self) -> float:
+        """Minimum lot size returned when SL is absent or the computed lot is too small."""
+        return self._min_lot
+
+    def get_lot_size(
+        self,
+        balance: float,
+        entry_price: float,
+        symbol: str,
+        stop_loss_price: float = 0.0,
+    ) -> float:
+        """Calculate the lot size that risks exactly *risk_amount* dollars at the SL.
+
+        Args:
+            balance: Ignored (risk is fixed, not a fraction of balance).
+            entry_price: Intended fill price.
+            symbol: Ignored (pip-size differences are already absorbed into
+                the absolute *stop_loss_price* distance).
+            stop_loss_price: Absolute stop-loss price level. When ``0.0`` or
+                equal to *entry_price*, falls back to :attr:`min_lot`.
+
+        Returns:
+            Lot size rounded to 2 decimal places, never below :attr:`min_lot`.
+        """
+        sl_distance = abs(entry_price - stop_loss_price)
+
+        if stop_loss_price == 0.0 or sl_distance == 0.0:
+            logger.warning(
+                'FixedRiskLotSizeManager: no valid stop-loss distance — '
+                f'falling back to min_lot={self._min_lot}'
+            )
+            return self._min_lot
+
+        raw = self._risk_amount / (sl_distance * self._contract_size)
+        lot = round(raw, 2)
+
+        if lot < self._min_lot:
+            logger.warning(
+                f'FixedRiskLotSizeManager: computed lot {lot:.4f} < min_lot={self._min_lot} — '
+                'clamping up'
+            )
+            return self._min_lot
+
+        return lot
