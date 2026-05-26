@@ -1,4 +1,4 @@
-"""Core bot orchestrator — wires data → strategy → execution → notification."""
+"""Core bot orchestrator — wires data -> strategy -> execution -> notification."""
 
 import time
 from datetime import UTC, datetime
@@ -115,7 +115,7 @@ class TradingBot:
         df = self._provider.get_ohlcv(yf_symbol, self._settings.timeframe)
         signal = self._strategy.generate_signal(df, symbol)
 
-        logger.info(f'[Bot] {symbol} → {signal}')
+        logger.info(f'[Bot] {symbol} -> {signal}')
 
         if not signal.is_actionable:
             return

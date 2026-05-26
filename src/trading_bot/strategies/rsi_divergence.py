@@ -85,7 +85,7 @@ class RSIDivergenceStrategy(BaseStrategy):
     - **Regular Bearish** (SELL): price ``HH`` AND RSI ``LH``
     - **Hidden  Bearish** (SELL): price ``LH`` AND RSI ``HH``
 
-    Priority order: regular bullish → regular bearish → hidden bullish →
+    Priority order: regular bullish -> regular bearish -> hidden bullish ->
     hidden bearish.  First match wins.
 
     Args:
@@ -210,8 +210,8 @@ class RSIDivergenceStrategy(BaseStrategy):
                 tp = self._tpsl.calculate_tp(SignalType.BUY, price, symbol)
                 reason = (
                     f'Regular bullish divergence: '
-                    f'price LL ({p1_low:.5f} → {p2_low:.5f}) | '
-                    f'RSI HL ({r1_low:.1f} → {r2_low:.1f})'
+                    f'price LL ({p1_low:.5f} -> {p2_low:.5f}) | '
+                    f'RSI HL ({r1_low:.1f} -> {r2_low:.1f})'
                 )
                 logger.info(f'[RSIDivergence] BUY signal for {symbol} — {reason}')
                 return Signal(
@@ -244,8 +244,8 @@ class RSIDivergenceStrategy(BaseStrategy):
                 tp = self._tpsl.calculate_tp(SignalType.SELL, price, symbol)
                 reason = (
                     f'Regular bearish divergence: '
-                    f'price HH ({p1_high:.5f} → {p2_high:.5f}) | '
-                    f'RSI LH ({r1_high:.1f} → {r2_high:.1f})'
+                    f'price HH ({p1_high:.5f} -> {p2_high:.5f}) | '
+                    f'RSI LH ({r1_high:.1f} -> {r2_high:.1f})'
                 )
                 logger.info(f'[RSIDivergence] SELL signal for {symbol} — {reason}')
                 return Signal(
@@ -280,8 +280,8 @@ class RSIDivergenceStrategy(BaseStrategy):
                 tp = self._tpsl.calculate_tp(SignalType.BUY, price, symbol)
                 reason = (
                     f'Hidden bullish divergence: '
-                    f'price HL ({p1_low:.5f} → {p2_low:.5f}) | '
-                    f'RSI LL ({r1_low:.1f} → {r2_low:.1f})'
+                    f'price HL ({p1_low:.5f} -> {p2_low:.5f}) | '
+                    f'RSI LL ({r1_low:.1f} -> {r2_low:.1f})'
                 )
                 logger.info(f'[RSIDivergence] BUY signal for {symbol} — {reason}')
                 return Signal(
@@ -313,8 +313,8 @@ class RSIDivergenceStrategy(BaseStrategy):
                 tp = self._tpsl.calculate_tp(SignalType.SELL, price, symbol)
                 reason = (
                     f'Hidden bearish divergence: '
-                    f'price LH ({p1_high:.5f} → {p2_high:.5f}) | '
-                    f'RSI HH ({r1_high:.1f} → {r2_high:.1f})'
+                    f'price LH ({p1_high:.5f} -> {p2_high:.5f}) | '
+                    f'RSI HH ({r1_high:.1f} -> {r2_high:.1f})'
                 )
                 logger.info(f'[RSIDivergence] SELL signal for {symbol} — {reason}')
                 return Signal(

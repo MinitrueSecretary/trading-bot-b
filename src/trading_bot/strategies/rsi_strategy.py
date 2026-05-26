@@ -85,7 +85,7 @@ class RSIStrategy(BaseStrategy):
             tp = self._tpsl.calculate_tp(SignalType.BUY, price, symbol)
             reason = (
                 f'RSI crossed above oversold ({self._oversold}): '
-                f'{rsi_prev:.1f} → {rsi_curr:.1f} | price > SMA200={sma200:.5f}'
+                f'{rsi_prev:.1f} -> {rsi_curr:.1f} | price > SMA200={sma200:.5f}'
             )
             logger.info(f'[RSI] BUY signal for {symbol} — {reason}')
             return Signal(
@@ -104,7 +104,7 @@ class RSIStrategy(BaseStrategy):
             tp = self._tpsl.calculate_tp(SignalType.SELL, price, symbol)
             reason = (
                 f'RSI crossed below overbought ({self._overbought}): '
-                f'{rsi_prev:.1f} → {rsi_curr:.1f} | price < SMA200={sma200:.5f}'
+                f'{rsi_prev:.1f} -> {rsi_curr:.1f} | price < SMA200={sma200:.5f}'
             )
             logger.info(f'[RSI] SELL signal for {symbol} — {reason}')
             return Signal(
