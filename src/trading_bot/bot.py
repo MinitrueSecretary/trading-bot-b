@@ -9,7 +9,9 @@ from trading_bot.execution import get_executor
 from trading_bot.execution.paper_executor import PaperExecutor
 from trading_bot.notifications.discord import DiscordNotifier
 from trading_bot.strategies import get_strategy
+from trading_bot.strategies.base_strategy import Signal
 from trading_bot.utils.logger import get_logger
+from trading_bot.utils.lot_size import BaseLotSizeManager
 
 logger = get_logger(__name__)
 
@@ -24,12 +26,17 @@ class TradingBot:
         settings: Application settings.
     """
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        lot_size_manager: BaseLotSizeManager | None = None,
+    ) -> None:
         self._settings = settings
         self._provider = get_data_provider(settings)
         self._strategy = get_strategy(settings)
         self._executor = get_executor(settings)
         self._notifier = DiscordNotifier(settings.discord_webhook_url)
+        self._lot_size_manager = lot_size_manager
         self._running = False
 
     # ------------------------------------------------------------------
@@ -124,7 +131,7 @@ class TradingBot:
         self._notifier.send_signal(signal)
 
         # Calculate lot size via fixed risk
-        volume = self._calculate_volume()
+        volume = self._calculate_volume(signal, symbol)
 
         # Place the order
         result = self._executor.place_order(signal, volume)
@@ -139,16 +146,29 @@ class TradingBot:
                 logger.info(f'[Bot] Position closed: {close_result}')
                 self._notifier.send_order_result(close_result)
 
-    def _calculate_volume(self) -> float:
-        """Calculate lot size based on fixed risk percentage.
+    def _calculate_volume(self, signal: Signal, symbol: str) -> float:
+        """Calculate lot size for a trade.
+
+        When a :class:`~trading_bot.utils.lot_size.BaseLotSizeManager` was
+        injected at construction time it is used directly.  Otherwise the
+        settings-based percentage-risk formula is applied as a fallback.
+
+        Args:
+            signal: The actionable signal carrying entry price and stop-loss.
+            symbol: Instrument symbol (e.g. ``'EURUSD'``).
 
         Returns:
             Lot size rounded to 2 decimal places (minimum 0.01).
         """
-        # For MT5 executor, we'd query account balance; paper has it directly
         balance = self._executor.balance if isinstance(self._executor, PaperExecutor) else 10_000.0
 
-        risk_amount = balance * (self._settings.risk_per_trade_pct / 100)
+        if self._lot_size_manager is not None:
+            return self._lot_size_manager.get_lot_size(
+                balance, signal.entry_price, symbol, signal.stop_loss
+            )
+
+        # Fallback: settings-based percentage risk
         # Simplified: $1 per pip per 0.1 lot; 1 pip = $10 per lot
+        risk_amount = balance * (self._settings.risk_per_trade_pct / 100)
         lot = risk_amount / (self._settings.stop_loss_pips * 10)
         return max(0.01, round(lot, 2))
