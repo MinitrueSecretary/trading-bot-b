@@ -19,8 +19,6 @@ logger = get_logger(__name__)
 _MT5_COMMENT_MAX = 63  # MT5 hard limit for the comment field
 
 
-
-
 class MT5Executor(BaseExecutor):
     """Sends live orders to MT5.
 
@@ -91,6 +89,25 @@ class MT5Executor(BaseExecutor):
             self._ORDER_TYPE_BUY if signal.signal_type == SignalType.BUY else self._ORDER_TYPE_SELL
         )
         mt5_symbol = self._settings.mt5_symbol_for(signal.symbol)
+
+        # Guard: skip if a position for this symbol is already open.
+        existing = mt5.positions_get(symbol=mt5_symbol)  # type: ignore[union-attr]
+        if existing:
+            msg = (
+                f'Skipped {signal.signal_type.value} {signal.symbol} — '
+                f'{len(existing)} open position(s) already exist for {mt5_symbol}'
+            )
+            logger.info(f'[MT5Executor] {msg}')
+            return OrderResult(
+                success=False,
+                order_id='',
+                symbol=signal.symbol,
+                signal_type=signal.signal_type,
+                price=signal.entry_price,
+                volume=volume,
+                status=OrderStatus.REJECTED,
+                message=msg,
+            )
 
         request: dict[str, object] = {
             'action': self._TRADE_ACTION_DEAL,
