@@ -161,7 +161,6 @@ class TradingBot:
             Lot size rounded to 2 decimal places (minimum 0.01).
         """
         balance = self._executor.balance if isinstance(self._executor, PaperExecutor) else 10_000.0
-
         if self._lot_size_manager is not None:
             return self._lot_size_manager.get_lot_size(
                 balance, signal.entry_price, symbol, signal.stop_loss

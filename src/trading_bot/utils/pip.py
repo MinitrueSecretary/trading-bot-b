@@ -63,7 +63,7 @@ def get_pip_size(symbol: str) -> float:
     if 'JPY' in sym:
         return 0.01
 
-    return 0.0001
+    return 0.00001
 
 
 def get_contract_size(symbol: str) -> float:
