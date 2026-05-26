@@ -37,11 +37,47 @@ def main() -> None:
     type=float,
     help='Take-profit distance in pips (overrides BOT_TAKE_PROFIT_PIPS).',
 )
+@click.option(
+    '--lot-size',
+    'lot_size',
+    default=None,
+    type=float,
+    help='Fixed lot size per trade (FixedLotSizeManager). Mutually exclusive with --risk-amount and --risk-pct.',
+)
+@click.option(
+    '--risk-amount',
+    'risk_amount',
+    default=None,
+    type=float,
+    help='Fixed dollar amount at risk per trade (FixedRiskLotSizeManager). Mutually exclusive with --lot-size and --risk-pct.',
+)
+@click.option(
+    '--risk-pct',
+    'risk_pct',
+    default=None,
+    type=float,
+    help='Percentage of balance to risk per trade (overrides BOT_RISK_PER_TRADE_PCT). Mutually exclusive with --lot-size and --risk-amount.',
+)
 def trade(
-    dry_run: bool | None, strategy: str | None, sl_pips: float | None, tp_pips: float | None
+    dry_run: bool | None,
+    strategy: str | None,
+    sl_pips: float | None,
+    tp_pips: float | None,
+    lot_size: float | None,
+    risk_amount: float | None,
+    risk_pct: float | None,
 ) -> None:
     """Start the live / paper trading loop."""
     from trading_bot.bot import TradingBot
+    from trading_bot.utils.lot_size import (
+        BaseLotSizeManager,
+        FixedLotSizeManager,
+        FixedRiskLotSizeManager,
+    )
+
+    exclusives = sum(x is not None for x in (lot_size, risk_amount, risk_pct))
+    if exclusives > 1:
+        raise click.UsageError('--lot-size, --risk-amount, and --risk-pct are mutually exclusive.')
 
     settings = get_settings()
     if dry_run is not None:
@@ -52,8 +88,23 @@ def trade(
         settings = settings.model_copy(update={'stop_loss_pips': sl_pips})
     if tp_pips is not None:
         settings = settings.model_copy(update={'take_profit_pips': tp_pips})
+    if risk_pct is not None:
+        settings = settings.model_copy(update={'risk_per_trade_pct': risk_pct})
 
-    bot = TradingBot(settings)
+    lot_mgr: BaseLotSizeManager | None = None
+    if lot_size is not None:
+        lot_mgr = FixedLotSizeManager(lot_size=lot_size)
+        console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
+    elif risk_amount is not None:
+        lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
+        console.print(
+            f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]'
+        )
+    else:
+        pct = settings.risk_per_trade_pct
+        console.print(f'[cyan]Lot sizing: percentage risk ({pct}% of balance)[/]')
+
+    bot = TradingBot(settings, lot_size_manager=lot_mgr)
     bot.start()
 
 
