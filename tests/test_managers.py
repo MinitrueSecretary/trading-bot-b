@@ -7,9 +7,12 @@ import pytest
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import SignalType
 from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
-from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager, FixedRiskLotSizeManager
+from trading_bot.utils.lot_size import (
+    BaseLotSizeManager,
+    FixedLotSizeManager,
+    FixedRiskLotSizeManager,
+)
 from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
-
 
 # ─── FixedPipsTPSLManager ─────────────────────────────────────────────────────
 
@@ -202,7 +205,9 @@ class TestFixedLotSizeManager:
 
     def test_ignores_stop_loss_price(self, mgr: FixedLotSizeManager) -> None:
         """Stop-loss price does not change the returned lot size."""
-        assert mgr.get_lot_size(10_000, 1.1, 'EURUSD', 1.09) == mgr.get_lot_size(10_000, 1.1, 'EURUSD', 0.0)
+        assert mgr.get_lot_size(10_000, 1.1, 'EURUSD', 1.09) == mgr.get_lot_size(
+            10_000, 1.1, 'EURUSD', 0.0
+        )
 
     def test_custom_lot_size(self) -> None:
         """A non-default lot size is correctly returned."""

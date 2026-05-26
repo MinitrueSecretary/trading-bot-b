@@ -2,7 +2,7 @@
 
 import re
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +11,7 @@ import pandas as pd
 from trading_bot.strategies.base_strategy import BaseStrategy, SignalType
 from trading_bot.utils.logger import get_logger
 from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager
-from trading_bot.utils.pip import get_pip_size
+from trading_bot.utils.pip import get_contract_size, get_pip_size
 
 logger = get_logger(__name__)
 
@@ -86,7 +86,7 @@ class BacktestResult:
         else:
             folder = Path(output_dir)
             folder.mkdir(parents=True, exist_ok=True)
-            ts = datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')
+            ts = datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')
             safe_symbol = re.sub(r'[^\w]', '_', self.symbol)
             dest = folder / f'{safe_symbol}_{self.strategy_name}_{ts}.csv'
 
@@ -156,6 +156,7 @@ class Backtester:
         """
         required = self._strategy.required_bars()
         pip_size = get_pip_size(symbol)
+        contract_size = get_contract_size(symbol)
 
         balance = self._initial_balance
         equity_values: list[float] = [balance]
@@ -196,7 +197,7 @@ class Backtester:
                         exit_price = tp
                         exit_reason = 'TP'
                     if exit_price:
-                        pnl = (exit_price - entry) * vol * 100_000 - self._commission * vol
+                        pnl = (exit_price - entry) * vol * contract_size - self._commission * vol
                 elif direction == SignalType.SELL:
                     if bar_high >= sl and sl > 0:
                         exit_price = sl
@@ -205,7 +206,7 @@ class Backtester:
                         exit_price = tp
                         exit_reason = 'TP'
                     if exit_price:
-                        pnl = (entry - exit_price) * vol * 100_000 - self._commission * vol
+                        pnl = (entry - exit_price) * vol * contract_size - self._commission * vol
 
                 if exit_price:
                     balance += pnl
@@ -250,9 +251,9 @@ class Backtester:
             entry = float(in_trade['entry_price'])  # type: ignore[arg-type]
             vol = float(in_trade['volume'])  # type: ignore[arg-type]
             pnl = (
-                (last_price - entry) * vol * 100_000
+                (last_price - entry) * vol * contract_size
                 if direction == SignalType.BUY
-                else (entry - last_price) * vol * 100_000
+                else (entry - last_price) * vol * contract_size
             )
             balance += pnl
             in_trade['exit_price'] = last_price

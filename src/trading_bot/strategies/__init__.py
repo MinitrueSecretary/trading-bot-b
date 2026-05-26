@@ -3,6 +3,7 @@
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.strategies.macd_strategy import MACDStrategy
+from trading_bot.strategies.rsi_divergence import RSIDivergenceStrategy
 from trading_bot.strategies.rsi_strategy import RSIStrategy
 from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
 
@@ -10,6 +11,7 @@ _REGISTRY: dict[str, type[BaseStrategy]] = {
     'sma_crossover': SMACrossoverStrategy,
     'rsi': RSIStrategy,
     'macd': MACDStrategy,
+    'rsi_divergence': RSIDivergenceStrategy,
 }
 
 
@@ -44,6 +46,7 @@ __all__ = [
     'SMACrossoverStrategy',
     'RSIStrategy',
     'MACDStrategy',
+    'RSIDivergenceStrategy',
     'get_strategy',
     'list_strategies',
 ]

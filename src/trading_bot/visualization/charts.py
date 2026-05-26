@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -286,7 +286,7 @@ def save_chart(
     folder = Path(output_dir)
     folder.mkdir(parents=True, exist_ok=True)
 
-    ts = datetime.now(tz=timezone.utc).strftime('%Y%m%d_%H%M%S')
+    ts = datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')
     safe_symbol = re.sub(r'[^\w]', '_', symbol)
     filename = f'{safe_symbol}_{label}_{ts}.html'
     dest = folder / filename

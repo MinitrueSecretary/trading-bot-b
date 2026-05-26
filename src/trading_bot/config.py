@@ -59,6 +59,15 @@ class Settings(BaseSettings):
     macd_fast: int = Field(default=12, description='MACD fast EMA period')
     macd_slow: int = Field(default=26, description='MACD slow EMA period')
     macd_signal: int = Field(default=9, description='MACD signal period')
+    stoch_rsi_period: int = Field(default=14, gt=1, description='StochRSI RSI period')
+    stoch_rsi_k: int = Field(default=3, gt=0, description='StochRSI K smoothing period')
+    stoch_rsi_d: int = Field(default=3, gt=0, description='StochRSI D smoothing period')
+    rsi_divergence_lookback: int = Field(
+        default=50, gt=1, description='Number of recent bars to search for swing pivot pairs'
+    )
+    rsi_divergence_swing_window: int = Field(
+        default=5, gt=0, description='Bars on each side required to confirm a swing pivot'
+    )
 
     # --- Risk ---
     risk_per_trade_pct: float = Field(

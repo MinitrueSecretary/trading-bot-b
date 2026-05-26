@@ -3,6 +3,8 @@
 import logging
 from abc import ABC, abstractmethod
 
+from trading_bot.utils.pip import get_contract_size
+
 logger = logging.getLogger(__name__)
 
 
@@ -96,19 +98,20 @@ class FixedRiskLotSizeManager(BaseLotSizeManager):
     ``pnl = price_change * lot_size * contract_size``, so a stop-loss hit
     will lose approximately *risk_amount* dollars.
 
+    The contract size is looked up automatically from :func:`get_contract_size`
+    using the *symbol* passed to :meth:`get_lot_size`, so the correct value is
+    used for every instrument (forex, metals, crypto, …).
+
     When no stop-loss price is provided, or the computed lot would fall below
     *min_lot*, the manager falls back to *min_lot* and logs a warning.
 
     Args:
         risk_amount: Fixed dollar amount to risk per trade (must be > 0).
-        contract_size: Units per lot — default ``100_000`` matches the value
-            used in the backtester and paper executor (must be > 0).
         min_lot: Minimum returnable lot size (default ``0.01``, the smallest
             standard MT5 lot step). Acts as a floor (must be > 0).
 
     Raises:
-        ValueError: If any of *risk_amount*, *contract_size*, or *min_lot*
-            are not positive.
+        ValueError: If *risk_amount* or *min_lot* are not positive.
 
     Examples:
         >>> mgr = FixedRiskLotSizeManager(risk_amount=100.0)
@@ -120,28 +123,19 @@ class FixedRiskLotSizeManager(BaseLotSizeManager):
     def __init__(
         self,
         risk_amount: float,
-        contract_size: float = 100_000.0,
         min_lot: float = 0.01,
     ) -> None:
         if risk_amount <= 0:
             raise ValueError(f'risk_amount must be positive, got {risk_amount}')
-        if contract_size <= 0:
-            raise ValueError(f'contract_size must be positive, got {contract_size}')
         if min_lot <= 0:
             raise ValueError(f'min_lot must be positive, got {min_lot}')
         self._risk_amount = risk_amount
-        self._contract_size = contract_size
         self._min_lot = min_lot
 
     @property
     def risk_amount(self) -> float:
         """Fixed dollar amount at risk per trade."""
         return self._risk_amount
-
-    @property
-    def contract_size(self) -> float:
-        """Units per lot used in the P&L calculation."""
-        return self._contract_size
 
     @property
     def min_lot(self) -> float:
@@ -160,8 +154,8 @@ class FixedRiskLotSizeManager(BaseLotSizeManager):
         Args:
             balance: Ignored (risk is fixed, not a fraction of balance).
             entry_price: Intended fill price.
-            symbol: Ignored (pip-size differences are already absorbed into
-                the absolute *stop_loss_price* distance).
+            symbol: Instrument symbol used to look up the contract size via
+                :func:`~trading_bot.utils.pip.get_contract_size`.
             stop_loss_price: Absolute stop-loss price level. When ``0.0`` or
                 equal to *entry_price*, falls back to :attr:`min_lot`.
 
@@ -177,7 +171,8 @@ class FixedRiskLotSizeManager(BaseLotSizeManager):
             )
             return self._min_lot
 
-        raw = self._risk_amount / (sl_distance * self._contract_size)
+        contract_size = get_contract_size(symbol)
+        raw = self._risk_amount / (sl_distance * contract_size)
         lot = round(raw, 2)
 
         if lot < self._min_lot:
