@@ -187,7 +187,7 @@ class RSIDivergenceStrategy(BaseStrategy):
 
         # Freshness filter: P2 must be the latest candles.
         # Bar n-1 is excluded from pivot detection (unfinished candle), so the
-        # newest possible pivot is n-2.  
+        # newest possible pivot is n-2.
         # If 3 latest candles -> index ≥ n-4.
         freshness_min = len(price_lows) - 2
         low_fresh = len(low_idx) >= 2 and low_idx[-1] >= freshness_min

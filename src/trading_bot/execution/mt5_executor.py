@@ -15,6 +15,25 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+_MT5_COMMENT_MAX = 63  # MT5 hard limit for the comment field
+
+
+def _sanitise_comment(text: str) -> str:
+    """Return an MT5-safe comment string.
+
+    MT5 rejects ``order_send`` with error ``-2`` if the ``comment`` field
+    contains non-ASCII characters or exceeds 63 characters.  This helper
+    drops any non-ASCII bytes and truncates to the limit.
+
+    Args:
+        text: Raw comment string (may contain Unicode).
+
+    Returns:
+        ASCII-only string truncated to :data:`_MT5_COMMENT_MAX` characters.
+    """
+    ascii_text = text.encode('ascii', errors='ignore').decode('ascii')
+    return ascii_text[:_MT5_COMMENT_MAX]
+
 
 class MT5Executor(BaseExecutor):
     """Sends live orders to MT5.
@@ -97,7 +116,7 @@ class MT5Executor(BaseExecutor):
             'tp': signal.take_profit,
             'deviation': 20,
             'magic': self._settings.mt5_magic,
-            'comment': f'trading-bot-b | {signal.reason[:30]}',
+            'comment': _sanitise_comment(f'trading-bot-b | {signal.reason}'),
             'type_filling': self._ORDER_FILLING_IOC,
         }
 
@@ -184,7 +203,7 @@ class MT5Executor(BaseExecutor):
             'price': close_price,
             'deviation': 20,
             'magic': self._settings.mt5_magic,
-            'comment': 'trading-bot-b close',
+            'comment': _sanitise_comment('trading-bot-b close'),
             'type_filling': self._ORDER_FILLING_IOC,
         }
 
