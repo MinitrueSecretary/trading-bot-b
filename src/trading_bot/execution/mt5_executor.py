@@ -9,6 +9,7 @@ from trading_bot.config import Settings
 from trading_bot.execution.base_executor import BaseExecutor, OrderResult, OrderStatus
 from trading_bot.strategies.base_strategy import Signal, SignalType
 from trading_bot.utils.logger import get_logger
+from trading_bot.utils.pip import get_contract_size
 
 if TYPE_CHECKING:
     pass
@@ -18,21 +19,6 @@ logger = get_logger(__name__)
 _MT5_COMMENT_MAX = 63  # MT5 hard limit for the comment field
 
 
-def _sanitise_comment(text: str) -> str:
-    """Return an MT5-safe comment string.
-
-    MT5 rejects ``order_send`` with error ``-2`` if the ``comment`` field
-    contains non-ASCII characters or exceeds 63 characters.  This helper
-    drops any non-ASCII bytes and truncates to the limit.
-
-    Args:
-        text: Raw comment string (may contain Unicode).
-
-    Returns:
-        ASCII-only string truncated to :data:`_MT5_COMMENT_MAX` characters.
-    """
-    ascii_text = text.encode('ascii', errors='ignore').decode('ascii')
-    return ascii_text[:_MT5_COMMENT_MAX]
 
 
 class MT5Executor(BaseExecutor):
@@ -116,7 +102,7 @@ class MT5Executor(BaseExecutor):
             'tp': signal.take_profit,
             'deviation': 20,
             'magic': self._settings.mt5_magic,
-            'comment': _sanitise_comment(f'trading-bot-b | {signal.reason}'),
+            'comment': 'trading-bot-b open',
             'type_filling': self._ORDER_FILLING_IOC,
         }
 
@@ -140,9 +126,11 @@ class MT5Executor(BaseExecutor):
 
         order_id = str(result.order)  # type: ignore[union-attr]
         fill_price = float(result.price)  # type: ignore[union-attr]
+        contract_size = get_contract_size(signal.symbol)
         logger.info(
             f'[MT5Executor] Order filled: #{order_id} {signal.signal_type.value} '
-            f'{volume} {signal.symbol} @ {fill_price:.5f}'
+            f'{volume} {signal.symbol} @ {fill_price:.5f} '
+            f'(contract_size={contract_size:,.0f})'
         )
 
         return OrderResult(
@@ -203,7 +191,7 @@ class MT5Executor(BaseExecutor):
             'price': close_price,
             'deviation': 20,
             'magic': self._settings.mt5_magic,
-            'comment': _sanitise_comment('trading-bot-b close'),
+            'comment': 'trading-bot-b close',
             'type_filling': self._ORDER_FILLING_IOC,
         }
 
