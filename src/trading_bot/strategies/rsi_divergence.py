@@ -185,10 +185,11 @@ class RSIDivergenceStrategy(BaseStrategy):
         low_idx = _swing_lows(price_lows, self._swing_window)
         high_idx = _swing_highs(price_highs, self._swing_window)
 
-        # Freshness filter: P2 must be one of the last 3 *complete* candles.
+        # Freshness filter: P2 must be the latest candles.
         # Bar n-1 is excluded from pivot detection (unfinished candle), so the
-        # newest possible pivot is n-2.  "Within 3" therefore means index ≥ n-4.
-        freshness_min = len(price_lows) - 4
+        # newest possible pivot is n-2.  
+        # If 3 latest candles -> index ≥ n-4.
+        freshness_min = len(price_lows) - 2
         low_fresh = len(low_idx) >= 2 and low_idx[-1] >= freshness_min
         high_fresh = len(high_idx) >= 2 and high_idx[-1] >= freshness_min
 
