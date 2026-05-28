@@ -2,6 +2,7 @@
 
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
+from trading_bot.strategies.bollinger_bands import BollingerBandsStrategy
 from trading_bot.strategies.macd_strategy import MACDStrategy
 from trading_bot.strategies.rsi_divergence import RSIDivergenceStrategy
 from trading_bot.strategies.rsi_strategy import RSIStrategy
@@ -12,6 +13,7 @@ _REGISTRY: dict[str, type[BaseStrategy]] = {
     'rsi': RSIStrategy,
     'macd': MACDStrategy,
     'rsi_divergence': RSIDivergenceStrategy,
+    'bollinger_bands': BollingerBandsStrategy,
 }
 
 
@@ -47,6 +49,7 @@ __all__ = [
     'RSIStrategy',
     'MACDStrategy',
     'RSIDivergenceStrategy',
+    'BollingerBandsStrategy',
     'get_strategy',
     'list_strategies',
 ]

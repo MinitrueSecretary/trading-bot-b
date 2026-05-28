@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     rsi_divergence_swing_window: int = Field(
         default=5, gt=0, description='Bars on each side required to confirm a swing pivot'
     )
+    bb_period: int = Field(default=20, gt=1, description='Bollinger Bands look-back period')
+    bb_std_dev: float = Field(
+        default=2.0, gt=0, description='Bollinger Bands standard deviation multiplier'
+    )
+    bb_min_sl_pips: float = Field(
+        default=0.0, ge=0, description='Minimum SL distance in pips for BollingerBandsTPSLManager (0 = disabled)'
+    )
 
     # --- Risk ---
     risk_per_trade_pct: float = Field(
