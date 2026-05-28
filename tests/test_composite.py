@@ -211,11 +211,24 @@ class TestAllAgreeMode:
         sig = c.generate_signal(_make_df(), 'EURUSD')
         assert sig.signal_type == SignalType.HOLD
 
-    def test_hold_counts_as_disagree(self, settings: Settings) -> None:
-        """ALL_AGREE requires every entry to be actionable in the same direction."""
+    def test_hold_is_abstention(self, settings: Settings) -> None:
+        """HOLDs are ignored; unanimous non-HOLD strategies trigger execution."""
         c = CompositeStrategy(
             [
                 StrategyEntry(_buy(settings), symbols=['*']),
+                StrategyEntry(_hold(settings), symbols=['*']),
+            ],
+            mode=CombineMode.ALL_AGREE,
+        )
+        sig = c.generate_signal(_make_df(), 'EURUSD')
+        assert sig.signal_type == SignalType.BUY
+
+    def test_buy_and_sell_with_hold_abstain_still_disagree(self, settings: Settings) -> None:
+        """A HOLD abstention does not resolve a BUY vs SELL conflict."""
+        c = CompositeStrategy(
+            [
+                StrategyEntry(_buy(settings), symbols=['*']),
+                StrategyEntry(_sell(settings), symbols=['*']),
                 StrategyEntry(_hold(settings), symbols=['*']),
             ],
             mode=CombineMode.ALL_AGREE,

@@ -170,17 +170,19 @@ class CompositeStrategy(BaseStrategy):
             return applicable[0][1]
 
         if self._mode == CombineMode.ALL_AGREE:
+            # HOLDs are treated as abstentions — only non-HOLD signals must agree.
             actionable = [(e, s) for e, s in applicable if s.is_actionable]
             if not actionable:
                 return applicable[0][1]
             directions = {s.signal_type for _, s in actionable}
-            if len(directions) == 1 and len(actionable) == len(applicable):
+            if len(directions) == 1:
                 best_entry, best_sig = max(actionable, key=lambda t: t[1].strength)
                 return self._tag(best_sig, best_entry.strategy.name, applicable)
-            disagree = [f'{e.strategy.name}={s.signal_type.value}' for e, s in applicable]
+            disagree = [f'{e.strategy.name}={s.signal_type.value}' for e, s in applicable
+                        if s.is_actionable]
             return Signal(
                 SignalType.HOLD, symbol, 0.0,
-                reason=f'[composite:all_agree] Strategies disagree: {disagree}',
+                reason=f'[composite:all_agree] Actionable strategies disagree: {disagree}',
                 metadata={'votes': {e.strategy.name: s.signal_type.value for e, s in applicable}},
             )
 
