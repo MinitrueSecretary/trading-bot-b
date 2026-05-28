@@ -1,9 +1,14 @@
 """SMA Crossover strategy — fast MA crosses above/below slow MA."""
 
+from typing import TYPE_CHECKING
+
 import pandas as pd
 import pandas_ta as ta  # type: ignore[import]
 
 from trading_bot.config import Settings
+
+if TYPE_CHECKING:
+    import plotly.graph_objects as go
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
 from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
@@ -118,3 +123,77 @@ class SMACrossoverStrategy(BaseStrategy):
             )
 
         return Signal(SignalType.HOLD, symbol, price, reason='No crossover detected')
+
+    def plot_signal(self, df: pd.DataFrame, signal: Signal, symbol: str) -> 'go.Figure':
+        """Candlestick chart with fast/slow SMA overlays and signal marker.
+
+        Args:
+            df: OHLCV DataFrame (full history; last 100 bars are displayed).
+            signal: Signal to mark on the chart.
+            symbol: Instrument name for the title.
+
+        Returns:
+            A :class:`plotly.graph_objects.Figure`.
+        """
+        import plotly.graph_objects as go
+        import pandas_ta as ta
+        from plotly.subplots import make_subplots
+
+        display_n = min(len(df), 100)
+        fast_col = f'sma_{self._fast}'
+        slow_col = f'sma_{self._slow}'
+
+        # Compute on full df for accuracy; slice to display window
+        fast_sma = ta.sma(df['close'], length=self._fast)
+        slow_sma = ta.sma(df['close'], length=self._slow)
+        window = df.tail(display_n).copy()
+        window[fast_col] = fast_sma.iloc[-display_n:].values
+        window[slow_col] = slow_sma.iloc[-display_n:].values
+
+        fig = make_subplots(rows=1, cols=1)
+
+        fig.add_trace(go.Candlestick(
+            x=window.index,
+            open=window['open'], high=window['high'],
+            low=window['low'], close=window['close'],
+            name=symbol,
+            increasing_line_color='#26a69a',
+            decreasing_line_color='#ef5350',
+        ))
+        fig.add_trace(go.Scatter(
+            x=window.index, y=window[fast_col],
+            name=f'SMA{self._fast}', line={'color': '#f39c12', 'width': 1.5},
+        ))
+        fig.add_trace(go.Scatter(
+            x=window.index, y=window[slow_col],
+            name=f'SMA{self._slow}', line={'color': '#3498db', 'width': 1.5},
+        ))
+
+        if signal.is_actionable:
+            is_buy = signal.signal_type == SignalType.BUY
+            fig.add_trace(go.Scatter(
+                x=[window.index[-1]], y=[signal.entry_price],
+                mode='markers',
+                marker={
+                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                    'size': 14,
+                    'color': '#26a69a' if is_buy else '#ef5350',
+                },
+                name=signal.signal_type.value,
+            ))
+            if signal.stop_loss:
+                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
+                              annotation_text='SL', annotation_position='right')
+            if signal.take_profit:
+                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
+                              annotation_text='TP', annotation_position='right')
+
+        fig.update_layout(
+            title=f'{symbol} — SMA {self._fast}/{self._slow} | {signal.signal_type.value}',
+            xaxis_rangeslider_visible=False,
+            template='plotly_dark',
+            height=600,
+            legend={'orientation': 'h', 'y': 1.02},
+            margin={'l': 50, 'r': 80, 't': 60, 'b': 50},
+        )
+        return fig

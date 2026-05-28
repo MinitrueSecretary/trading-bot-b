@@ -252,6 +252,48 @@ def show(fig: go.Figure) -> None:
     fig.show()
 
 
+def save_png(
+    fig: go.Figure,
+    symbol: str,
+    label: str = 'signal',
+    output_dir: str | Path = 'signals',
+    width: int = 1200,
+    height: int = 700,
+) -> Path:
+    """Save *fig* as a PNG image and return the path.
+
+    Uses `kaleido <https://github.com/plotly/Kaleido>`_ for static export.
+    The filename follows the same ``{symbol}_{label}_{UTC-timestamp}.png``
+    convention as :func:`save_chart`.
+
+    Args:
+        fig: Plotly figure to export.
+        symbol: Instrument name used in the filename.
+        label: Short tag describing the chart type (e.g. ``'signal'``).
+        output_dir: Folder to write into (default: ``signals/`` relative to cwd).
+        width: Image width in pixels (default: 1200).
+        height: Image height in pixels (default: 700).
+
+    Returns:
+        :class:`~pathlib.Path` of the saved PNG.
+    """
+    folder = Path(output_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+
+    ts = datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')
+    safe_symbol = re.sub(r'[^\w]', '_', symbol)
+    dest = folder / f'{safe_symbol}_{label}_{ts}.png'
+
+    # Kaleido's orjson serializer does not support pd.Timestamp; round-trip
+    # through plotly's own JSON serializer (which does) to normalise all
+    # timestamp values to ISO strings before handing the figure to kaleido.
+    import plotly.io as pio
+    fig = pio.from_json(fig.to_json())
+
+    fig.write_image(str(dest), width=width, height=height)
+    return dest
+
+
 def save_html(fig: go.Figure, path: str) -> None:
     """Save the figure as a standalone HTML file.
 

@@ -3,8 +3,12 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    import plotly.graph_objects as go
 
 
 class SignalType(StrEnum):
@@ -76,3 +80,18 @@ class BaseStrategy(ABC):
     @abstractmethod
     def required_bars(self) -> int:
         """Minimum number of bars required to generate a valid signal."""
+
+    @abstractmethod
+    def plot_signal(self, df: pd.DataFrame, signal: Signal, symbol: str) -> 'go.Figure':
+        """Build a strategy-specific chart showing the indicator context around *signal*.
+
+        Each strategy implements its own visualisation (e.g. SMAs, RSI, MACD).
+
+        Args:
+            df: Full OHLCV DataFrame — implementations slice internally for display.
+            signal: The signal to visualise (may be HOLD; implementations handle gracefully).
+            symbol: Instrument name used in the chart title.
+
+        Returns:
+            A :class:`plotly.graph_objects.Figure` ready to save or display.
+        """

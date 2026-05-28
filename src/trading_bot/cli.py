@@ -58,6 +58,12 @@ def main() -> None:
     type=float,
     help='Percentage of balance to risk per trade (overrides BOT_RISK_PER_TRADE_PCT). Mutually exclusive with --lot-size and --risk-amount.',
 )
+@click.option(
+    '--signal-discord/--no-signal-discord',
+    'signal_discord',
+    default=False,
+    help='Send a strategy-specific signal chart to Discord on each actionable signal (requires BOT_DISCORD_WEBHOOK_URL and kaleido).',
+)
 def trade(
     dry_run: bool | None,
     strategy: str | None,
@@ -66,6 +72,7 @@ def trade(
     lot_size: float | None,
     risk_amount: float | None,
     risk_pct: float | None,
+    signal_discord: bool,
 ) -> None:
     """Start the live / paper trading loop."""
     from trading_bot.bot import TradingBot
@@ -104,7 +111,7 @@ def trade(
         pct = settings.risk_per_trade_pct
         console.print(f'[cyan]Lot sizing: percentage risk ({pct}% of balance)[/]')
 
-    bot = TradingBot(settings, lot_size_manager=lot_mgr)
+    bot = TradingBot(settings, lot_size_manager=lot_mgr, signal_chart_discord=signal_discord)
     bot.start()
 
 
@@ -157,6 +164,12 @@ def trade(
     type=float,
     help='Fixed dollar amount at risk per trade (FixedRiskLotSizeManager). Mutually exclusive with --lot-size.',
 )
+@click.option(
+    '--save-signal-chart/--no-save-signal-chart',
+    'save_signal_chart',
+    default=False,
+    help='Save a strategy-specific signal PNG after the backtest (requires kaleido).',
+)
 def backtest(
     symbol: str | None,
     strategy: str | None,
@@ -167,6 +180,7 @@ def backtest(
     tp_pips: float | None,
     lot_size: float | None,
     risk_amount: float | None,
+    save_signal_chart: bool,
 ) -> None:
     """Run a strategy backtest and print statistics."""
     from trading_bot.backtesting import Backtester
@@ -238,6 +252,14 @@ def backtest(
         fig = plot_backtest(result)
         dest = save_chart_fn(fig, settings.primary_symbol, label='backtest')
         console.print(f'[green]Chart saved → {dest}[/]')
+
+    if save_signal_chart:
+        from trading_bot.visualization.charts import save_png
+        console.print('[cyan]Generating signal chart...[/]')
+        signal = strat.generate_signal(df, settings.primary_symbol)
+        fig = strat.plot_signal(df, signal, settings.primary_symbol)
+        dest = save_png(fig, settings.primary_symbol, label='signal')
+        console.print(f'[green]Signal chart saved → {dest}[/]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────

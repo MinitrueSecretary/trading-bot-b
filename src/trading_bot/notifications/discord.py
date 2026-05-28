@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -154,6 +156,49 @@ class DiscordNotifier:
         payload = self._embed(title=f'🚨 {title}', description=message, colour=_COLOUR_WARN)
         logger.error(f'[Discord] Error notification: {title} — {message}')
         self._send(payload)
+
+    def send_image(self, title: str, description: str, image_path: Path) -> bool:
+        """Send an embed with an attached PNG image via multipart upload.
+
+        The image is displayed inline inside the Discord embed using the
+        ``attachment://`` protocol.
+
+        Args:
+            title: Embed title (e.g. ``'BUY Signal — EURUSD'``).
+            description: Embed body text (e.g. the signal reason).
+            image_path: Path to the PNG file to attach.
+
+        Returns:
+            ``True`` if the message was delivered, ``False`` otherwise.
+        """
+        if not self._enabled or not self._url:
+            logger.debug(f'[Discord] Skipped (no webhook): image {image_path}')
+            return False
+
+        filename = image_path.name
+        embed: dict[str, Any] = {
+            'title': title,
+            'description': description,
+            'color': _COLOUR_INFO,
+            'timestamp': datetime.now(UTC).isoformat(),
+            'footer': {'text': 'trading-bot-b'},
+            'image': {'url': f'attachment://{filename}'},
+        }
+
+        try:
+            image_bytes = image_path.read_bytes()
+            with httpx.Client(timeout=30.0) as client:
+                resp = client.post(
+                    self._url,
+                    data={'payload_json': json.dumps({'embeds': [embed]})},
+                    files={'file[0]': (filename, image_bytes, 'image/png')},
+                )
+                resp.raise_for_status()
+                logger.info(f'[Discord] Image sent: {filename} (HTTP {resp.status_code})')
+                return True
+        except (httpx.HTTPError, OSError) as exc:
+            logger.error(f'[Discord] Failed to send image: {exc}')
+            return False
 
     def ping(self) -> bool:
         """Send a test message to verify the webhook is reachable.
