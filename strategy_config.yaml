@@ -1,0 +1,73 @@
+# Composite strategy configuration
+# Usage:
+#   trading-bot backtest --strategy-config strategy_config.yaml
+#   trading-bot trade    --strategy-config strategy_config.yaml
+#
+# mode controls how sub-strategy signals are combined:
+#   majority_vote  — direction with the most votes wins; ties → HOLD (default)
+#   weighted_vote  — direction whose weights sum higher wins; ties → HOLD
+#   first_signal   — first non-HOLD signal in list order wins
+#   all_agree      — only signals when every applicable strategy agrees
+
+mode: majority_vote
+
+strategies:
+  # ── SMA Crossover ─────────────────────────────────────────────────────────
+  - strategy: sma_crossover
+    enabled: true
+    symbols: ["*"]          # * = run for every symbol in BOT_SYMBOLS
+    weight: 1.0
+    params:
+      stop_loss_pips: 30
+      take_profit_pips: 60
+      sma_fast: 20
+      sma_slow: 50
+
+  # ── RSI with trend filter ─────────────────────────────────────────────────
+  - strategy: rsi
+    enabled: true
+    symbols: ["EURUSD", "GBPUSD"]   # only these two pairs
+    weight: 2.0                      # higher weight → more influence
+    params:
+      stop_loss_pips: 25
+      take_profit_pips: 50
+      rsi_period: 14
+      rsi_overbought: 70
+      rsi_oversold: 30
+
+  # ── MACD histogram crossover ──────────────────────────────────────────────
+  - strategy: macd
+    enabled: true
+    symbols: ["USDJPY", "EURJPY"]
+    weight: 1.5
+    params:
+      stop_loss_pips: 35
+      take_profit_pips: 70
+      macd_fast: 12
+      macd_slow: 26
+      macd_signal: 9
+
+  # ── Bollinger Bands mean-reversion ────────────────────────────────────────
+  - strategy: bollinger_bands
+    enabled: false          # disabled — flip to true to activate
+    symbols: ["BTCUSD", "ETHUSD"]
+    weight: 1.0
+    params:
+      stop_loss_pips: 100
+      take_profit_pips: 200
+      bb_period: 20
+      bb_std_dev: 2.0
+
+  # ── RSI Divergence ────────────────────────────────────────────────────────
+  - strategy: rsi_divergence
+    enabled: false
+    symbols: ["EURUSD"]
+    weight: 1.5
+    params:
+      stop_loss_pips: 30
+      take_profit_pips: 60
+      stoch_rsi_period: 14
+      stoch_rsi_k: 3
+      stoch_rsi_d: 3
+      rsi_divergence_lookback: 50
+      rsi_divergence_swing_window: 5
