@@ -53,4 +53,8 @@ coverage.xml
 *.html
 *.csv
 *.log
+*.png
 logs/
+charts/
+signals/
+trades/

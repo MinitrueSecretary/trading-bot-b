@@ -1,7 +1,11 @@
 """Core bot orchestrator — wires data -> strategy -> execution -> notification."""
 
+import tempfile
 import time
 from datetime import UTC, datetime
+from pathlib import Path
+
+import pandas as pd
 
 from trading_bot.config import Settings
 from trading_bot.data import get_data_provider
@@ -30,6 +34,7 @@ class TradingBot:
         self,
         settings: Settings,
         lot_size_manager: BaseLotSizeManager | None = None,
+        signal_chart_discord: bool = False,
     ) -> None:
         self._settings = settings
         self._provider = get_data_provider(settings)
@@ -37,6 +42,7 @@ class TradingBot:
         self._executor = get_executor(settings)
         self._notifier = DiscordNotifier(settings.discord_webhook_url)
         self._lot_size_manager = lot_size_manager
+        self._signal_chart_discord = signal_chart_discord
         self._running = False
 
     # ------------------------------------------------------------------
@@ -130,6 +136,10 @@ class TradingBot:
         # Notify Discord about the signal
         self._notifier.send_signal(signal)
 
+        # Optionally send a strategy-specific signal chart to Discord
+        if self._signal_chart_discord and self._notifier._enabled:
+            self._send_signal_chart(df, signal, symbol)
+
         # Calculate lot size via fixed risk
         volume = self._calculate_volume(signal, symbol)
 
@@ -145,6 +155,37 @@ class TradingBot:
             for close_result in closed:
                 logger.info(f'[Bot] Position closed: {close_result}')
                 self._notifier.send_order_result(close_result)
+
+    def _send_signal_chart(self, df: pd.DataFrame, signal: Signal, symbol: str) -> None:
+        """Generate a strategy-specific PNG chart and send it to Discord.
+
+        Writes a temporary PNG using kaleido, uploads it via the webhook,
+        then deletes the file.  Failures are logged as warnings so they never
+        interrupt the trading loop.
+
+        Args:
+            df: The OHLCV DataFrame used to generate the signal.
+            signal: The actionable signal to visualise.
+            symbol: Instrument name.
+        """
+        tmp_path: Path | None = None
+        try:
+            import plotly.io as pio
+            fig = self._strategy.plot_signal(df, signal, symbol)
+            with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+                tmp_path = Path(tmp.name)
+            fig = pio.from_json(fig.to_json())
+            fig.write_image(str(tmp_path), width=1200, height=700)
+            self._notifier.send_image(
+                title=f'{signal.signal_type.value} — {symbol}',
+                description=signal.reason,
+                image_path=tmp_path,
+            )
+        except Exception as exc:
+            logger.warning(f'[Bot] Failed to send signal chart for {symbol}: {exc}')
+        finally:
+            if tmp_path is not None:
+                tmp_path.unlink(missing_ok=True)
 
     def _calculate_volume(self, signal: Signal, symbol: str) -> float:
         """Calculate lot size for a trade.

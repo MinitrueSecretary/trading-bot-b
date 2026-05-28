@@ -1,11 +1,16 @@
 """RSI Divergence strategy using swing-point pivot detection."""
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import pandas_ta as ta  # type: ignore[import]
 
 from trading_bot.config import Settings
+
+if TYPE_CHECKING:
+    import plotly.graph_objects as go
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
 from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
@@ -350,3 +355,147 @@ class RSIDivergenceStrategy(BaseStrategy):
                 f'StochRSI-K={stochrsi_k_curr:.1f}'
             ),
         )
+
+    def plot_signal(self, df: pd.DataFrame, signal: Signal, symbol: str) -> 'go.Figure':
+        """Two-panel chart: candlestick with divergence tangents (top) and StochRSI K/D (bottom).
+
+        When the signal carries pivot metadata, trend lines are drawn on both
+        panels connecting the two divergence pivot bars — making the
+        price/RSI disagreement visually obvious.
+
+        Args:
+            df: OHLCV DataFrame (full history; last 200 bars are displayed).
+            signal: Signal to mark on the chart.
+            symbol: Instrument name for the title.
+
+        Returns:
+            A :class:`plotly.graph_objects.Figure`.
+        """
+        import plotly.graph_objects as go
+        import pandas_ta as ta
+        from plotly.subplots import make_subplots
+
+        display_n = min(len(df), 200)
+        window = df.tail(display_n).copy()
+
+        stochrsi = ta.stochrsi(
+            df['close'],
+            length=self._rsi_period,
+            rsi_length=self._rsi_period,
+            k=self._k,
+            d=self._d,
+        )
+        if stochrsi is not None and not stochrsi.empty:
+            k_col, d_col = stochrsi.columns[0], stochrsi.columns[1]
+            window['_k'] = stochrsi[k_col].iloc[-display_n:].values
+            window['_d'] = stochrsi[d_col].iloc[-display_n:].values
+
+        has_stochrsi = '_k' in window.columns
+        k_label = f'StochRSI-K({self._rsi_period},{self._k},{self._d})'
+
+        fig = make_subplots(
+            rows=2, cols=1, shared_xaxes=True,
+            vertical_spacing=0.06,
+            row_heights=[0.6, 0.4],
+            subplot_titles=[symbol, k_label],
+        )
+
+        # ── Row 1: price ──────────────────────────────────────────────────
+        fig.add_trace(go.Candlestick(
+            x=window.index,
+            open=window['open'], high=window['high'],
+            low=window['low'], close=window['close'],
+            name=symbol,
+            increasing_line_color='#26a69a',
+            decreasing_line_color='#ef5350',
+        ), row=1, col=1)
+
+        if signal.is_actionable:
+            is_buy = signal.signal_type == SignalType.BUY
+            fig.add_trace(go.Scatter(
+                x=[window.index[-1]], y=[signal.entry_price],
+                mode='markers',
+                marker={
+                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                    'size': 14,
+                    'color': '#26a69a' if is_buy else '#ef5350',
+                },
+                name=signal.signal_type.value,
+            ), row=1, col=1)
+            if signal.stop_loss:
+                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
+                              annotation_text='SL', annotation_position='right', row=1, col=1)
+            if signal.take_profit:
+                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
+                              annotation_text='TP', annotation_position='right', row=1, col=1)
+
+            # ── Divergence tangent lines ───────────────────────────────────
+            # Re-detect pivots over the search slice so we can get bar timestamps.
+            if has_stochrsi and len(window) >= self._lookback + self._swing_window:
+                search = window.iloc[-(self._lookback + self._swing_window):]
+                is_low_div = 'bullish' in str(signal.metadata.get('divergence_type', ''))
+                rsi_k_arr = search['_k'].to_numpy(dtype=float)
+
+                if is_low_div:
+                    price_arr = search['low'].to_numpy(dtype=float)
+                    pivot_fn = _swing_lows
+                else:
+                    price_arr = search['high'].to_numpy(dtype=float)
+                    pivot_fn = _swing_highs
+
+                pivots = pivot_fn(price_arr, self._swing_window)
+                if len(pivots) >= 2:
+                    i1, i2 = pivots[-2], pivots[-1]
+                    t1, t2 = search.index[i1], search.index[i2]
+                    p1_val = price_arr[i1]
+                    p2_val = price_arr[i2]
+                    r1_val = rsi_k_arr[i1]
+                    r2_val = rsi_k_arr[i2]
+                    tang_colour = '#26a69a' if is_buy else '#ef5350'
+
+                    # Price tangent
+                    fig.add_trace(go.Scatter(
+                        x=[t1, t2], y=[p1_val, p2_val],
+                        mode='lines+markers',
+                        line={'color': tang_colour, 'width': 2, 'dash': 'dot'},
+                        marker={'size': 7, 'color': tang_colour},
+                        name='Price trend',
+                        showlegend=False,
+                    ), row=1, col=1)
+
+                    # RSI tangent (drawn in row 2 below after RSI traces added)
+                    fig.add_trace(go.Scatter(
+                        x=[t1, t2], y=[r1_val, r2_val],
+                        mode='lines+markers',
+                        line={'color': tang_colour, 'width': 2, 'dash': 'dot'},
+                        marker={'size': 7, 'color': tang_colour},
+                        name='RSI trend',
+                        showlegend=False,
+                    ), row=2, col=1)
+
+        # ── Row 2: StochRSI ───────────────────────────────────────────────
+        if has_stochrsi:
+            fig.add_trace(go.Scatter(
+                x=window.index, y=window['_k'],
+                name='K', line={'color': '#3498db', 'width': 1.5},
+            ), row=2, col=1)
+            fig.add_trace(go.Scatter(
+                x=window.index, y=window['_d'],
+                name='D', line={'color': '#e67e22', 'width': 1.5},
+            ), row=2, col=1)
+            fig.add_hline(y=80, line_dash='dash', line_color='#ef5350',
+                          annotation_text='80', annotation_position='right', row=2, col=1)
+            fig.add_hline(y=20, line_dash='dash', line_color='#26a69a',
+                          annotation_text='20', annotation_position='right', row=2, col=1)
+            fig.update_yaxes(range=[0, 100], row=2, col=1)
+
+        div_type = signal.metadata.get('divergence_type', 'none') if signal.is_actionable else 'HOLD'
+        fig.update_layout(
+            title=f'{symbol} — RSI Divergence | {div_type} | {signal.signal_type.value}',
+            xaxis_rangeslider_visible=False,
+            template='plotly_dark',
+            height=700,
+            legend={'orientation': 'h', 'y': 1.02},
+            margin={'l': 50, 'r': 80, 't': 60, 'b': 50},
+        )
+        return fig
