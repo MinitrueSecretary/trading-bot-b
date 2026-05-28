@@ -3,6 +3,12 @@
 from trading_bot.config import Settings
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.strategies.bollinger_bands import BollingerBandsStrategy
+from trading_bot.strategies.composite import (
+    CombineMode,
+    CompositeStrategy,
+    StrategyEntry,
+    load_composite_strategy,
+)
 from trading_bot.strategies.macd_strategy import MACDStrategy
 from trading_bot.strategies.rsi_divergence import RSIDivergenceStrategy
 from trading_bot.strategies.rsi_strategy import RSIStrategy
@@ -50,6 +56,10 @@ __all__ = [
     'MACDStrategy',
     'RSIDivergenceStrategy',
     'BollingerBandsStrategy',
+    'CombineMode',
+    'CompositeStrategy',
+    'StrategyEntry',
+    'load_composite_strategy',
     'get_strategy',
     'list_strategies',
 ]

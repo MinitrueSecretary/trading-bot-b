@@ -64,6 +64,13 @@ def main() -> None:
     default=False,
     help='Send a strategy-specific signal chart to Discord on each actionable signal (requires BOT_DISCORD_WEBHOOK_URL and kaleido).',
 )
+@click.option(
+    '--strategy-config',
+    'strategy_config',
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help='Path to a YAML composite-strategy config file. Overrides --strategy.',
+)
 def trade(
     dry_run: bool | None,
     strategy: str | None,
@@ -73,14 +80,19 @@ def trade(
     risk_amount: float | None,
     risk_pct: float | None,
     signal_discord: bool,
+    strategy_config: str | None,
 ) -> None:
     """Start the live / paper trading loop."""
     from trading_bot.bot import TradingBot
+    from trading_bot.strategies import load_composite_strategy
     from trading_bot.utils.lot_size import (
         BaseLotSizeManager,
         FixedLotSizeManager,
         FixedRiskLotSizeManager,
     )
+
+    if strategy_config is not None and strategy is not None:
+        raise click.UsageError('--strategy-config and --strategy are mutually exclusive.')
 
     exclusives = sum(x is not None for x in (lot_size, risk_amount, risk_pct))
     if exclusives > 1:
@@ -111,7 +123,20 @@ def trade(
         pct = settings.risk_per_trade_pct
         console.print(f'[cyan]Lot sizing: percentage risk ({pct}% of balance)[/]')
 
-    bot = TradingBot(settings, lot_size_manager=lot_mgr, signal_chart_discord=signal_discord)
+    composite_strat = None
+    if strategy_config is not None:
+        composite_strat = load_composite_strategy(strategy_config, settings)
+        console.print(
+            f'[cyan]Strategy: CompositeStrategy ({len(composite_strat.entries)} entries, '
+            f'mode={composite_strat.mode})[/]'
+        )
+
+    bot = TradingBot(
+        settings,
+        lot_size_manager=lot_mgr,
+        signal_chart_discord=signal_discord,
+        strategy=composite_strat,
+    )
     bot.start()
 
 
@@ -170,6 +195,13 @@ def trade(
     default=False,
     help='Save a strategy-specific signal PNG after the backtest (requires kaleido).',
 )
+@click.option(
+    '--strategy-config',
+    'strategy_config',
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help='Path to a YAML composite-strategy config file. Overrides --strategy.',
+)
 def backtest(
     symbol: str | None,
     strategy: str | None,
@@ -181,11 +213,12 @@ def backtest(
     lot_size: float | None,
     risk_amount: float | None,
     save_signal_chart: bool,
+    strategy_config: str | None,
 ) -> None:
     """Run a strategy backtest and print statistics."""
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
-    from trading_bot.strategies import get_strategy
+    from trading_bot.strategies import get_strategy, load_composite_strategy
     from trading_bot.utils.lot_size import (
         BaseLotSizeManager,
         FixedLotSizeManager,
@@ -194,6 +227,8 @@ def backtest(
     from trading_bot.visualization.charts import plot_backtest
     from trading_bot.visualization.charts import save_chart as save_chart_fn
 
+    if strategy_config is not None and strategy is not None:
+        raise click.UsageError('--strategy-config and --strategy are mutually exclusive.')
     if lot_size is not None and risk_amount is not None:
         raise click.UsageError('--lot-size and --risk-amount are mutually exclusive.')
 
@@ -238,7 +273,14 @@ def backtest(
 
     console.print(f'[green]Got {len(df)} bars ({df.index[0]} → {df.index[-1]})[/]')
 
-    strat = get_strategy(settings)
+    if strategy_config is not None:
+        strat = load_composite_strategy(strategy_config, settings)
+        console.print(
+            f'[cyan]Strategy: CompositeStrategy ({len(strat.entries)} entries, '  # type: ignore[attr-defined]
+            f'mode={strat.mode})[/]'  # type: ignore[attr-defined]
+        )
+    else:
+        strat = get_strategy(settings)
     bt = Backtester(strat, lot_size_manager=lot_mgr)
     result = bt.run(df, settings.primary_symbol)
 

@@ -13,7 +13,7 @@ from trading_bot.execution import get_executor
 from trading_bot.execution.paper_executor import PaperExecutor
 from trading_bot.notifications.discord import DiscordNotifier
 from trading_bot.strategies import get_strategy
-from trading_bot.strategies.base_strategy import Signal
+from trading_bot.strategies.base_strategy import BaseStrategy, Signal
 from trading_bot.utils.logger import get_logger
 from trading_bot.utils.lot_size import BaseLotSizeManager
 
@@ -35,10 +35,11 @@ class TradingBot:
         settings: Settings,
         lot_size_manager: BaseLotSizeManager | None = None,
         signal_chart_discord: bool = False,
+        strategy: 'BaseStrategy | None' = None,
     ) -> None:
         self._settings = settings
         self._provider = get_data_provider(settings)
-        self._strategy = get_strategy(settings)
+        self._strategy = strategy if strategy is not None else get_strategy(settings)
         self._executor = get_executor(settings)
         self._notifier = DiscordNotifier(settings.discord_webhook_url)
         self._lot_size_manager = lot_size_manager
