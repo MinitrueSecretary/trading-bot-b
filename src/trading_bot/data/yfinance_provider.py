@@ -1,5 +1,7 @@
 """YFinance data provider — cross-platform, no broker account needed."""
 
+from datetime import UTC, datetime
+
 import pandas as pd
 import yfinance as yf
 
@@ -78,13 +80,17 @@ class YFinanceProvider(BaseDataProvider):
         symbol: str,
         timeframe: Timeframe,
         bars: int = 500,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> pd.DataFrame:
         """Fetch OHLCV data from Yahoo Finance.
 
         Args:
             symbol: MT5-style symbol (e.g. ``'EURUSD'``) or YF-style (``'EURUSD=X'``).
             timeframe: Candle timeframe.
-            bars: Approximate number of bars to return.
+            bars: Approximate number of bars to return (ignored when *start* is given).
+            start: Inclusive range start in UTC.
+            end: Inclusive range end in UTC (defaults to now when *start* given).
 
         Returns:
             DataFrame with lowercase OHLCV columns and UTC DatetimeIndex.
@@ -94,12 +100,24 @@ class YFinanceProvider(BaseDataProvider):
         """
         yf_symbol = _to_yf_symbol(symbol)
         interval = _TF_MAP[timeframe]
-        period = _PERIOD_FOR_TF[timeframe]
-
-        logger.info(f'[YFinance] Downloading {yf_symbol} | tf={interval} | period={period}')
 
         ticker = yf.Ticker(yf_symbol)
-        df: pd.DataFrame = ticker.history(period=period, interval=interval, auto_adjust=True)
+
+        if start is not None:
+            date_from = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
+            raw_end = end if end is not None else datetime.now(UTC)
+            date_to = raw_end if raw_end.tzinfo is not None else raw_end.replace(tzinfo=UTC)
+            logger.info(
+                f'[YFinance] Downloading {yf_symbol} | tf={interval} '
+                f'| {date_from.date()} → {date_to.date()}'
+            )
+            df: pd.DataFrame = ticker.history(
+                start=date_from, end=date_to, interval=interval, auto_adjust=True
+            )
+        else:
+            period = _PERIOD_FOR_TF[timeframe]
+            logger.info(f'[YFinance] Downloading {yf_symbol} | tf={interval} | period={period}')
+            df = ticker.history(period=period, interval=interval, auto_adjust=True)
 
         if df.empty:
             raise ValueError(f'No data returned for symbol {yf_symbol!r}')

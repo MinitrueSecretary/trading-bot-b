@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
@@ -117,13 +118,17 @@ class MT5Provider(BaseDataProvider):
         symbol: str,
         timeframe: Timeframe,
         bars: int = 500,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> pd.DataFrame:
         """Fetch OHLCV bars from MT5.
 
         Args:
             symbol: MT5 symbol string (e.g. ``'EURUSD'``).
             timeframe: Candle timeframe.
-            bars: Number of bars to retrieve.
+            bars: Number of bars to retrieve (ignored when *start* is given).
+            start: Inclusive range start in UTC.
+            end: Inclusive range end in UTC (defaults to now when *start* given).
 
         Returns:
             DataFrame with lowercase OHLCV columns and UTC DatetimeIndex.
@@ -138,7 +143,13 @@ class MT5Provider(BaseDataProvider):
         mt5_tf = _MT5_TF_MAP[timeframe.value]
         mt5_symbol = self._settings.mt5_symbol_for(symbol)
 
-        rates = mt5.copy_rates_from_pos(mt5_symbol, mt5_tf, 0, bars)  # type: ignore[union-attr]
+        if start is not None:
+            date_from = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
+            raw_end = end if end is not None else datetime.now(UTC)
+            date_to = raw_end if raw_end.tzinfo is not None else raw_end.replace(tzinfo=UTC)
+            rates = mt5.copy_rates_range(mt5_symbol, mt5_tf, date_from, date_to)  # type: ignore[union-attr]
+        else:
+            rates = mt5.copy_rates_from_pos(mt5_symbol, mt5_tf, 0, bars)  # type: ignore[union-attr]
 
         if rates is None or len(rates) == 0:
             error = mt5.last_error()  # type: ignore[union-attr]
