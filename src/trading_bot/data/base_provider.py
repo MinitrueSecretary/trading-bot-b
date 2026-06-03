@@ -1,6 +1,7 @@
 """Abstract base class for OHLCV data providers."""
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 import pandas as pd
 
@@ -32,13 +33,23 @@ class BaseDataProvider(ABC):
         symbol: str,
         timeframe: Timeframe,
         bars: int = 500,
+        start: datetime | None = None,
+        end: datetime | None = None,
     ) -> pd.DataFrame:
         """Fetch historical OHLCV bars.
+
+        Supply either *bars* (most-recent N candles) or *start* / *end* UTC
+        datetimes (date-range fetch).  When *start* and/or *end* are given
+        they take precedence and *bars* is ignored.
 
         Args:
             symbol: Instrument symbol in the provider's native format.
             timeframe: Candle timeframe.
-            bars: Number of historical bars to fetch.
+            bars: Number of historical bars to fetch (used when no date range given).
+            start: Inclusive range start in UTC.  If only *start* is given,
+                *end* defaults to the current UTC time.
+            end: Inclusive range end in UTC.  If only *end* is given,
+                *start* must also be provided.
 
         Returns:
             DataFrame with columns ``['open', 'high', 'low', 'close', 'volume']``

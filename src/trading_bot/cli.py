@@ -1,5 +1,7 @@
 """Command-line interface for the trading bot."""
 
+from datetime import datetime
+
 import click
 from rich.table import Table
 
@@ -384,6 +386,106 @@ def analyse(
         )
         dest = save_chart(fig, settings.primary_symbol, label='analyse')
         console.print(f'[green]Chart saved → {dest}[/]')
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# fetch-ohlcv command
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@main.command('fetch-ohlcv')
+@click.option('--symbol', default=None, help='Symbol in MT5 format (default: BOT_PRIMARY_SYMBOL).')
+@click.option(
+    '--timeframe',
+    default=None,
+    type=click.Choice(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1wk']),
+    help='OHLCV timeframe (default: BOT_TIMEFRAME).',
+)
+@click.option('--bars', default=500, show_default=True, help='Number of bars to fetch (ignored when --start is used).')
+@click.option(
+    '--start',
+    'start_dt',
+    default=None,
+    type=click.DateTime(formats=['%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S']),
+    help='Range start (UTC). E.g. 2024-01-01 or 2024-01-01T08:00:00.',
+)
+@click.option(
+    '--end',
+    'end_dt',
+    default=None,
+    type=click.DateTime(formats=['%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S']),
+    help='Range end (UTC, default: now). Requires --start.',
+)
+@click.option(
+    '--output',
+    'output_path',
+    default=None,
+    type=click.Path(),
+    help='Destination CSV file. Auto-generates ohlcv/{SYMBOL}_{TIMESTAMP}.csv if omitted.',
+)
+def fetch_ohlcv(
+    symbol: str | None,
+    timeframe: str | None,
+    bars: int,
+    start_dt: datetime | None,
+    end_dt: datetime | None,
+    output_path: str | None,
+) -> None:
+    """Fetch OHLCV data from MT5 (or yfinance on non-Windows) and save as CSV.
+
+    Use --bars for the most recent N candles, or --start / --end for a
+    specific date range (UTC).  --start and --end take precedence over --bars.
+    """
+    import re
+    from datetime import UTC
+    from pathlib import Path
+
+    from trading_bot.config import Timeframe
+    from trading_bot.data import get_data_provider
+
+    # click.DateTime returns naive datetime objects — treat as UTC
+    start: datetime | None = (
+        start_dt.replace(tzinfo=UTC) if start_dt is not None else None  # type: ignore[union-attr]
+    )
+    end: datetime | None = None
+    if end_dt is not None:
+        if start is None:
+            raise click.UsageError('--end requires --start.')
+        end = end_dt.replace(tzinfo=UTC)  # type: ignore[union-attr]
+
+    settings = get_settings()
+    sym = symbol.upper() if symbol else settings.primary_symbol
+    tf = Timeframe(timeframe) if timeframe else settings.timeframe
+
+    provider = get_data_provider(settings)
+    provider.connect()
+
+    fetch_sym = settings.yf_symbol_for(sym) if not settings.is_windows else sym
+
+    if start is not None:
+        end_display = end.date() if end else 'now'
+        console.print(f'[cyan]Fetching {sym} {tf.value} from {start.date()} to {end_display}...[/]')
+    else:
+        console.print(f'[cyan]Fetching {bars} bars of {sym} {tf.value}...[/]')
+
+    try:
+        df = provider.get_ohlcv(fetch_sym, tf, bars=bars, start=start, end=end)
+    finally:
+        provider.disconnect()
+
+    if output_path:
+        dest = Path(output_path)
+    else:
+        ts = datetime.now(tz=UTC).strftime('%Y%m%d_%H%M%S')
+        safe_sym = re.sub(r'[^\w]', '_', sym)
+        dest = Path('ohlcv') / f'{safe_sym}_{tf.value.replace("/", "")}_{ts}.csv'
+
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(dest)
+
+    console.print(
+        f'[green]✓[/green] {len(df)} bars saved → [bold]{dest}[/bold]'
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
