@@ -561,24 +561,34 @@ def list_strategies_cmd() -> None:
 )
 @click.option('--symbol', default=None, help='Symbol to study (default: BOT_PRIMARY_SYMBOL).')
 @click.option('--bars', default=300, show_default=True, help='Number of bars to fetch.')
+@click.option(
+    '--timeframe',
+    default=None,
+    type=click.Choice(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1wk']),
+    help='OHLCV timeframe (default: BOT_TIMEFRAME).',
+)
 @click.option('--chart/--no-chart', default=False, show_default=True, help='Save HTML chart.')
-def study(analyser_name: str, symbol: str | None, bars: int, chart: bool) -> None:
+def study(
+    analyser_name: str, symbol: str | None, bars: int, timeframe: str | None, chart: bool
+) -> None:
     """Fetch live data, run an analyser, and print the findings."""
     from trading_bot.analysers import get_analyser
+    from trading_bot.config import Timeframe
     from trading_bot.data import get_data_provider
     from trading_bot.visualization.charts import save_chart
 
     settings = get_settings()
     if symbol:
         settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
+    tf = Timeframe(timeframe) if timeframe else settings.timeframe
 
     provider = get_data_provider(settings)
     provider.connect()
 
     yf_symbol = settings.yf_symbol if not settings.is_windows else settings.primary_symbol
-    console.print(f'[cyan]Fetching {bars} bars for {settings.primary_symbol}...[/]')
+    console.print(f'[cyan]Fetching {bars} bars ({tf.value}) for {settings.primary_symbol}...[/]')
 
-    df = provider.get_ohlcv(yf_symbol, settings.timeframe, bars=bars)
+    df = provider.get_ohlcv(yf_symbol, tf, bars=bars)
     provider.disconnect()
 
     analyser = get_analyser(analyser_name, settings)
