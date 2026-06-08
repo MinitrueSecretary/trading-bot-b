@@ -2,8 +2,6 @@
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-import numpy.typing as npt
 import pandas as pd
 import pandas_ta as ta  # type: ignore[import]
 
@@ -13,69 +11,11 @@ if TYPE_CHECKING:
     import plotly.graph_objects as go
 from trading_bot.strategies.base_strategy import BaseStrategy, Signal, SignalType
 from trading_bot.utils.logger import get_logger
+from trading_bot.utils.pivots import swing_highs as _swing_highs
+from trading_bot.utils.pivots import swing_lows as _swing_lows
 from trading_bot.utils.tpsl import BaseTPSLManager, FixedPipsTPSLManager
 
 logger = get_logger(__name__)
-
-
-def _swing_lows(series: npt.NDArray[np.float64], window: int) -> list[int]:
-    """Return indices of confirmed swing lows in *series*.
-
-    A bar at index *i* is a swing low when its value is strictly less than
-    every bar within ``window`` positions to the left **and** all available
-    bars to the right (up to ``window``).  Bars near the right edge use
-    however many bars exist rather than requiring a full ``window``, so
-    pivots can be detected all the way up to the final bar.
-
-    Args:
-        series: 1-D array of values to scan.
-        window: Number of bars required to the left; right side uses
-            ``min(window, available)`` bars.
-
-    Returns:
-        Sorted list of integer indices that are confirmed swing lows.
-    """
-    indices: list[int] = []
-    n = len(series)
-    # Stop at n-2: the last bar (n-1) is excluded because it may be an
-    # unfinished candle and cannot yet be confirmed as a local minimum.
-    for i in range(window, n - 1):
-        val = series[i]
-        right = min(window, n - 1 - i)
-        if all(val < series[i - j] for j in range(1, window + 1)) and all(
-            val < series[i + j] for j in range(1, right + 1)
-        ):
-            indices.append(i)
-    return indices
-
-
-def _swing_highs(series: npt.NDArray[np.float64], window: int) -> list[int]:
-    """Return indices of confirmed swing highs in *series*.
-
-    A bar at index *i* is a swing high when its value is strictly greater
-    than every bar within ``window`` positions to the left **and** all
-    available bars to the right (up to ``window``).  The last bar (*n-1*)
-    is excluded as it may be an unfinished candle.
-
-    Args:
-        series: 1-D array of values to scan.
-        window: Number of bars required to the left; right side uses
-            ``min(window, available)`` bars.
-
-    Returns:
-        Sorted list of integer indices that are confirmed swing highs.
-    """
-    indices: list[int] = []
-    n = len(series)
-    # Stop at n-2 for the same reason as _swing_lows.
-    for i in range(window, n - 1):
-        val = series[i]
-        right = min(window, n - 1 - i)
-        if all(val > series[i - j] for j in range(1, window + 1)) and all(
-            val > series[i + j] for j in range(1, right + 1)
-        ):
-            indices.append(i)
-    return indices
 
 
 class RSIDivergenceStrategy(BaseStrategy):
@@ -371,8 +311,8 @@ class RSIDivergenceStrategy(BaseStrategy):
         Returns:
             A :class:`plotly.graph_objects.Figure`.
         """
-        import plotly.graph_objects as go
         import pandas_ta as ta
+        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         display_n = min(len(df), 200)
@@ -394,102 +334,169 @@ class RSIDivergenceStrategy(BaseStrategy):
         k_label = f'StochRSI-K({self._rsi_period},{self._k},{self._d})'
 
         fig = make_subplots(
-            rows=2, cols=1, shared_xaxes=True,
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
             vertical_spacing=0.06,
             row_heights=[0.6, 0.4],
             subplot_titles=[symbol, k_label],
         )
 
         # ── Row 1: price ──────────────────────────────────────────────────
-        fig.add_trace(go.Candlestick(
-            x=window.index,
-            open=window['open'], high=window['high'],
-            low=window['low'], close=window['close'],
-            name=symbol,
-            increasing_line_color='#26a69a',
-            decreasing_line_color='#ef5350',
-        ), row=1, col=1)
+        fig.add_trace(
+            go.Candlestick(
+                x=window.index,
+                open=window['open'],
+                high=window['high'],
+                low=window['low'],
+                close=window['close'],
+                name=symbol,
+                increasing_line_color='#26a69a',
+                decreasing_line_color='#ef5350',
+            ),
+            row=1,
+            col=1,
+        )
 
         if signal.is_actionable:
             is_buy = signal.signal_type == SignalType.BUY
-            fig.add_trace(go.Scatter(
-                x=[window.index[-1]], y=[signal.entry_price],
-                mode='markers',
-                marker={
-                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
-                    'size': 14,
-                    'color': '#26a69a' if is_buy else '#ef5350',
-                },
-                name=signal.signal_type.value,
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=[window.index[-1]],
+                    y=[signal.entry_price],
+                    mode='markers',
+                    marker={
+                        'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                        'size': 14,
+                        'color': '#26a69a' if is_buy else '#ef5350',
+                    },
+                    name=signal.signal_type.value,
+                ),
+                row=1,
+                col=1,
+            )
             if signal.stop_loss:
-                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
-                              annotation_text='SL', annotation_position='right', row=1, col=1)
+                fig.add_hline(
+                    y=signal.stop_loss,
+                    line_dash='dash',
+                    line_color='#ef5350',
+                    annotation_text='SL',
+                    annotation_position='right',
+                    row=1,
+                    col=1,
+                )
             if signal.take_profit:
-                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
-                              annotation_text='TP', annotation_position='right', row=1, col=1)
+                fig.add_hline(
+                    y=signal.take_profit,
+                    line_dash='dash',
+                    line_color='#26a69a',
+                    annotation_text='TP',
+                    annotation_position='right',
+                    row=1,
+                    col=1,
+                )
 
-            # ── Divergence tangent lines ───────────────────────────────────
-            # Re-detect pivots over the search slice so we can get bar timestamps.
-            if has_stochrsi and len(window) >= self._lookback + self._swing_window:
-                search = window.iloc[-(self._lookback + self._swing_window):]
-                is_low_div = 'bullish' in str(signal.metadata.get('divergence_type', ''))
-                rsi_k_arr = search['_k'].to_numpy(dtype=float)
+            # ── Divergence tangent lines from signal metadata ──────────────
+            meta = signal.metadata
+            p1_val = meta.get('price_pivot1')
+            p2_val = meta.get('price_pivot2')
+            r1_val = meta.get('rsi_pivot1')
+            r2_val = meta.get('rsi_pivot2')
 
+            if (
+                has_stochrsi
+                and all(v is not None for v in (p1_val, p2_val, r1_val, r2_val))
+                and len(window) >= self._lookback + self._swing_window
+            ):
+                # Re-detect pivots only to recover bar timestamps for the x-axis.
+                search = window.iloc[-(self._lookback + self._swing_window) :]
+                is_low_div = 'bullish' in str(meta.get('divergence_type', ''))
                 if is_low_div:
                     price_arr = search['low'].to_numpy(dtype=float)
-                    pivot_fn = _swing_lows
+                    pivots = _swing_lows(price_arr, self._swing_window)
                 else:
                     price_arr = search['high'].to_numpy(dtype=float)
-                    pivot_fn = _swing_highs
+                    pivots = _swing_highs(price_arr, self._swing_window)
 
-                pivots = pivot_fn(price_arr, self._swing_window)
                 if len(pivots) >= 2:
-                    i1, i2 = pivots[-2], pivots[-1]
-                    t1, t2 = search.index[i1], search.index[i2]
-                    p1_val = price_arr[i1]
-                    p2_val = price_arr[i2]
-                    r1_val = rsi_k_arr[i1]
-                    r2_val = rsi_k_arr[i2]
+                    t1, t2 = search.index[pivots[-2]], search.index[pivots[-1]]
                     tang_colour = '#26a69a' if is_buy else '#ef5350'
 
-                    # Price tangent
-                    fig.add_trace(go.Scatter(
-                        x=[t1, t2], y=[p1_val, p2_val],
-                        mode='lines+markers',
-                        line={'color': tang_colour, 'width': 2, 'dash': 'dot'},
-                        marker={'size': 7, 'color': tang_colour},
-                        name='Price trend',
-                        showlegend=False,
-                    ), row=1, col=1)
+                    # Price pivot line
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[t1, t2],
+                            y=[p1_val, p2_val],
+                            mode='lines+markers',
+                            line={'color': tang_colour, 'width': 2, 'dash': 'dot'},
+                            marker={'size': 7, 'color': tang_colour},
+                            name='Price divergence',
+                            showlegend=False,
+                        ),
+                        row=1,
+                        col=1,
+                    )
 
-                    # RSI tangent (drawn in row 2 below after RSI traces added)
-                    fig.add_trace(go.Scatter(
-                        x=[t1, t2], y=[r1_val, r2_val],
-                        mode='lines+markers',
-                        line={'color': tang_colour, 'width': 2, 'dash': 'dot'},
-                        marker={'size': 7, 'color': tang_colour},
-                        name='RSI trend',
-                        showlegend=False,
-                    ), row=2, col=1)
+                    # RSI pivot line (row 2, drawn before StochRSI traces are added)
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[t1, t2],
+                            y=[r1_val, r2_val],
+                            mode='lines+markers',
+                            line={'color': tang_colour, 'width': 2, 'dash': 'dot'},
+                            marker={'size': 7, 'color': tang_colour},
+                            name='RSI divergence',
+                            showlegend=False,
+                        ),
+                        row=2,
+                        col=1,
+                    )
 
         # ── Row 2: StochRSI ───────────────────────────────────────────────
         if has_stochrsi:
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_k'],
-                name='K', line={'color': '#3498db', 'width': 1.5},
-            ), row=2, col=1)
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_d'],
-                name='D', line={'color': '#e67e22', 'width': 1.5},
-            ), row=2, col=1)
-            fig.add_hline(y=80, line_dash='dash', line_color='#ef5350',
-                          annotation_text='80', annotation_position='right', row=2, col=1)
-            fig.add_hline(y=20, line_dash='dash', line_color='#26a69a',
-                          annotation_text='20', annotation_position='right', row=2, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_k'],
+                    name='K',
+                    line={'color': '#3498db', 'width': 1.5},
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_d'],
+                    name='D',
+                    line={'color': '#e67e22', 'width': 1.5},
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_hline(
+                y=80,
+                line_dash='dash',
+                line_color='#ef5350',
+                annotation_text='80',
+                annotation_position='right',
+                row=2,
+                col=1,
+            )
+            fig.add_hline(
+                y=20,
+                line_dash='dash',
+                line_color='#26a69a',
+                annotation_text='20',
+                annotation_position='right',
+                row=2,
+                col=1,
+            )
             fig.update_yaxes(range=[0, 100], row=2, col=1)
 
-        div_type = signal.metadata.get('divergence_type', 'none') if signal.is_actionable else 'HOLD'
+        div_type = (
+            signal.metadata.get('divergence_type', 'none') if signal.is_actionable else 'HOLD'
+        )
         fig.update_layout(
             title=f'{symbol} — RSI Divergence | {div_type} | {signal.signal_type.value}',
             xaxis_rangeslider_visible=False,

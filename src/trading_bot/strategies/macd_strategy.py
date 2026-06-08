@@ -148,8 +148,8 @@ class MACDStrategy(BaseStrategy):
         Returns:
             A :class:`plotly.graph_objects.Figure`.
         """
-        import plotly.graph_objects as go
         import pandas_ta as ta
+        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         display_n = min(len(df), 150)
@@ -159,66 +159,112 @@ class MACDStrategy(BaseStrategy):
         if macd_result is not None and not macd_result.empty:
             hist_col = next((c for c in macd_result.columns if c.startswith('MACDh')), None)
             line_col = next((c for c in macd_result.columns if c.startswith('MACD_')), None)
-            sig_col  = next((c for c in macd_result.columns if c.startswith('MACDs')), None)
+            sig_col = next((c for c in macd_result.columns if c.startswith('MACDs')), None)
             if hist_col and line_col and sig_col:
                 window['_hist'] = macd_result[hist_col].iloc[-display_n:].values
                 window['_line'] = macd_result[line_col].iloc[-display_n:].values
-                window['_sig']  = macd_result[sig_col].iloc[-display_n:].values
+                window['_sig'] = macd_result[sig_col].iloc[-display_n:].values
 
         has_macd = '_hist' in window.columns
         label = f'MACD({self._fast},{self._slow},{self._signal})'
 
         fig = make_subplots(
-            rows=2, cols=1, shared_xaxes=True,
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
             vertical_spacing=0.06,
             row_heights=[0.6, 0.4],
             subplot_titles=[symbol, label],
         )
 
         # ── Row 1: price ──────────────────────────────────────────────────
-        fig.add_trace(go.Candlestick(
-            x=window.index,
-            open=window['open'], high=window['high'],
-            low=window['low'], close=window['close'],
-            name=symbol,
-            increasing_line_color='#26a69a',
-            decreasing_line_color='#ef5350',
-        ), row=1, col=1)
+        fig.add_trace(
+            go.Candlestick(
+                x=window.index,
+                open=window['open'],
+                high=window['high'],
+                low=window['low'],
+                close=window['close'],
+                name=symbol,
+                increasing_line_color='#26a69a',
+                decreasing_line_color='#ef5350',
+            ),
+            row=1,
+            col=1,
+        )
 
         if signal.is_actionable:
             is_buy = signal.signal_type == SignalType.BUY
-            fig.add_trace(go.Scatter(
-                x=[window.index[-1]], y=[signal.entry_price],
-                mode='markers',
-                marker={
-                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
-                    'size': 14,
-                    'color': '#26a69a' if is_buy else '#ef5350',
-                },
-                name=signal.signal_type.value,
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=[window.index[-1]],
+                    y=[signal.entry_price],
+                    mode='markers',
+                    marker={
+                        'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                        'size': 14,
+                        'color': '#26a69a' if is_buy else '#ef5350',
+                    },
+                    name=signal.signal_type.value,
+                ),
+                row=1,
+                col=1,
+            )
             if signal.stop_loss:
-                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
-                              annotation_text='SL', annotation_position='right', row=1, col=1)
+                fig.add_hline(
+                    y=signal.stop_loss,
+                    line_dash='dash',
+                    line_color='#ef5350',
+                    annotation_text='SL',
+                    annotation_position='right',
+                    row=1,
+                    col=1,
+                )
             if signal.take_profit:
-                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
-                              annotation_text='TP', annotation_position='right', row=1, col=1)
+                fig.add_hline(
+                    y=signal.take_profit,
+                    line_dash='dash',
+                    line_color='#26a69a',
+                    annotation_text='TP',
+                    annotation_position='right',
+                    row=1,
+                    col=1,
+                )
 
         # ── Row 2: MACD ───────────────────────────────────────────────────
         if has_macd:
             hist_vals = window['_hist']
             colors = ['#26a69a' if v >= 0 else '#ef5350' for v in hist_vals]
-            fig.add_trace(go.Bar(
-                x=window.index, y=hist_vals, name='Histogram', marker_color=colors,
-            ), row=2, col=1)
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_line'], name='MACD',
-                line={'color': '#3498db', 'width': 1.5},
-            ), row=2, col=1)
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_sig'], name='Signal',
-                line={'color': '#e67e22', 'width': 1.5},
-            ), row=2, col=1)
+            fig.add_trace(
+                go.Bar(
+                    x=window.index,
+                    y=hist_vals,
+                    name='Histogram',
+                    marker_color=colors,
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_line'],
+                    name='MACD',
+                    line={'color': '#3498db', 'width': 1.5},
+                ),
+                row=2,
+                col=1,
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_sig'],
+                    name='Signal',
+                    line={'color': '#e67e22', 'width': 1.5},
+                ),
+                row=2,
+                col=1,
+            )
             fig.add_hline(y=0, line_color='white', opacity=0.3, row=2, col=1)
 
         fig.update_layout(

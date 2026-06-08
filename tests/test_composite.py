@@ -17,10 +17,8 @@ from trading_bot.strategies.composite import (
     StrategyEntry,
     load_composite_strategy,
 )
-from trading_bot.strategies.macd_strategy import MACDStrategy
 from trading_bot.strategies.rsi_strategy import RSIStrategy
 from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,14 +55,26 @@ class _FixedSignalStrategy(SMACrossoverStrategy):
 
 
 def _buy(settings: Settings, price: float = 1.1, strength: float = 0.8) -> _FixedSignalStrategy:
-    sig = Signal(SignalType.BUY, 'EURUSD', price, stop_loss=price - 0.003,
-                 take_profit=price + 0.006, strength=strength)
+    sig = Signal(
+        SignalType.BUY,
+        'EURUSD',
+        price,
+        stop_loss=price - 0.003,
+        take_profit=price + 0.006,
+        strength=strength,
+    )
     return _FixedSignalStrategy(settings, sig)
 
 
 def _sell(settings: Settings, price: float = 1.1, strength: float = 0.8) -> _FixedSignalStrategy:
-    sig = Signal(SignalType.SELL, 'EURUSD', price, stop_loss=price + 0.003,
-                 take_profit=price - 0.006, strength=strength)
+    sig = Signal(
+        SignalType.SELL,
+        'EURUSD',
+        price,
+        stop_loss=price + 0.003,
+        take_profit=price - 0.006,
+        strength=strength,
+    )
     return _FixedSignalStrategy(settings, sig)
 
 
@@ -112,10 +122,12 @@ class TestCompositeConstruction:
     def test_required_bars_is_max(self, settings: Settings) -> None:
         sma = SMACrossoverStrategy(settings)
         rsi = RSIStrategy(settings)
-        c = CompositeStrategy([
-            StrategyEntry(sma, symbols=['*']),
-            StrategyEntry(rsi, symbols=['*']),
-        ])
+        c = CompositeStrategy(
+            [
+                StrategyEntry(sma, symbols=['*']),
+                StrategyEntry(rsi, symbols=['*']),
+            ]
+        )
         assert c.required_bars() == max(sma.required_bars(), rsi.required_bars())
 
     def test_mode_property(self, settings: Settings) -> None:
@@ -373,7 +385,9 @@ class TestLoadCompositeStrategy:
         return p
 
     def test_basic_yaml_loads(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: majority_vote
             strategies:
               - strategy: sma_crossover
@@ -382,14 +396,17 @@ class TestLoadCompositeStrategy:
                 params:
                   sma_fast: 5
                   sma_slow: 20
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         assert isinstance(composite, CompositeStrategy)
         assert composite.mode == CombineMode.MAJORITY_VOTE
         assert len(composite.entries) == 1
 
     def test_disabled_strategy_is_skipped(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: first_signal
             strategies:
               - strategy: sma_crossover
@@ -398,13 +415,16 @@ class TestLoadCompositeStrategy:
               - strategy: macd
                 enabled: true
                 symbols: ["*"]
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         assert len(composite.entries) == 1
         assert composite.entries[0].strategy.name == 'macd'
 
     def test_params_override_settings(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: majority_vote
             strategies:
               - strategy: sma_crossover
@@ -412,7 +432,8 @@ class TestLoadCompositeStrategy:
                 params:
                   sma_fast: 7
                   sma_slow: 21
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         # The strategy instance should have the overridden SMA params
         strat = composite.entries[0].strategy
@@ -421,12 +442,15 @@ class TestLoadCompositeStrategy:
         assert strat._slow == 21  # noqa: SLF001
 
     def test_symbol_scoping_from_yaml(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: majority_vote
             strategies:
               - strategy: rsi
                 symbols: ["EURUSD", "GBPUSD"]
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         entry = composite.entries[0]
         assert entry.applies_to('EURUSD')
@@ -434,32 +458,41 @@ class TestLoadCompositeStrategy:
         assert not entry.applies_to('USDJPY')
 
     def test_weight_from_yaml(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: weighted_vote
             strategies:
               - strategy: sma_crossover
                 symbols: ["*"]
                 weight: 3.5
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         assert composite.entries[0].weight == pytest.approx(3.5)
 
     def test_unknown_strategy_raises(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             strategies:
               - strategy: nonexistent_strategy
                 symbols: ["*"]
-        """)
+        """,
+        )
         with pytest.raises(ValueError, match='nonexistent_strategy'):
             load_composite_strategy(cfg, settings)
 
     def test_all_disabled_raises(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             strategies:
               - strategy: sma_crossover
                 enabled: false
                 symbols: ["*"]
-        """)
+        """,
+        )
         with pytest.raises(ValueError, match='No enabled strategies'):
             load_composite_strategy(cfg, settings)
 
@@ -469,17 +502,22 @@ class TestLoadCompositeStrategy:
 
     def test_all_combine_modes_accepted(self, settings: Settings, tmp_path: Path) -> None:
         for mode in CombineMode:
-            cfg = self._write_yaml(tmp_path, f"""
+            cfg = self._write_yaml(
+                tmp_path,
+                f"""
                 mode: {mode.value}
                 strategies:
                   - strategy: sma_crossover
                     symbols: ["*"]
-            """)
+            """,
+            )
             composite = load_composite_strategy(cfg, settings)
             assert composite.mode == mode
 
     def test_multiple_strategies_in_yaml(self, settings: Settings, tmp_path: Path) -> None:
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: weighted_vote
             strategies:
               - strategy: sma_crossover
@@ -491,7 +529,8 @@ class TestLoadCompositeStrategy:
               - strategy: rsi
                 symbols: ["GBPUSD"]
                 weight: 1.5
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         assert len(composite.entries) == 3
         assert composite.mode == CombineMode.WEIGHTED_VOTE
@@ -500,14 +539,17 @@ class TestLoadCompositeStrategy:
         self, settings: Settings, tmp_path: Path, ohlcv_df: pd.DataFrame
     ) -> None:
         """Integration: load from YAML and generate a signal end-to-end."""
-        cfg = self._write_yaml(tmp_path, """
+        cfg = self._write_yaml(
+            tmp_path,
+            """
             mode: majority_vote
             strategies:
               - strategy: sma_crossover
                 symbols: ["*"]
               - strategy: macd
                 symbols: ["*"]
-        """)
+        """,
+        )
         composite = load_composite_strategy(cfg, settings)
         sig = composite.generate_signal(ohlcv_df, 'EURUSD')
         assert sig.signal_type in {SignalType.BUY, SignalType.SELL, SignalType.HOLD}

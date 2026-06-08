@@ -299,6 +299,7 @@ def backtest(
 
     if save_signal_chart:
         from trading_bot.visualization.charts import save_png
+
         console.print('[cyan]Generating signal chart...[/]')
         signal = strat.generate_signal(df, settings.primary_symbol)
         fig = strat.plot_signal(df, signal, settings.primary_symbol)
@@ -401,7 +402,12 @@ def analyse(
     type=click.Choice(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1wk']),
     help='OHLCV timeframe (default: BOT_TIMEFRAME).',
 )
-@click.option('--bars', default=500, show_default=True, help='Number of bars to fetch (ignored when --start is used).')
+@click.option(
+    '--bars',
+    default=500,
+    show_default=True,
+    help='Number of bars to fetch (ignored when --start is used).',
+)
 @click.option(
     '--start',
     'start_dt',
@@ -483,9 +489,7 @@ def fetch_ohlcv(
     dest.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(dest)
 
-    console.print(
-        f'[green]✓[/green] {len(df)} bars saved → [bold]{dest}[/bold]'
-    )
+    console.print(f'[green]✓[/green] {len(df)} bars saved → [bold]{dest}[/bold]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -537,6 +541,92 @@ def list_strategies_cmd() -> None:
     }
 
     for name in list_strategies():
+        table.add_row(name, descriptions.get(name, '—'))
+
+    console.print(table)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# study command
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@main.command()
+@click.option(
+    '--analyser',
+    'analyser_name',
+    default='support_resistance',
+    show_default=True,
+    help='Analyser to run.',
+)
+@click.option('--symbol', default=None, help='Symbol to study (default: BOT_PRIMARY_SYMBOL).')
+@click.option('--bars', default=300, show_default=True, help='Number of bars to fetch.')
+@click.option(
+    '--timeframe',
+    default=None,
+    type=click.Choice(['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1wk']),
+    help='OHLCV timeframe (default: BOT_TIMEFRAME).',
+)
+@click.option('--chart/--no-chart', default=False, show_default=True, help='Save HTML chart.')
+def study(
+    analyser_name: str, symbol: str | None, bars: int, timeframe: str | None, chart: bool
+) -> None:
+    """Fetch live data, run an analyser, and print the findings."""
+    from trading_bot.analysers import get_analyser
+    from trading_bot.config import Timeframe
+    from trading_bot.data import get_data_provider
+    from trading_bot.visualization.charts import save_chart
+
+    settings = get_settings()
+    if symbol:
+        settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
+    tf = Timeframe(timeframe) if timeframe else settings.timeframe
+
+    provider = get_data_provider(settings)
+    provider.connect()
+
+    yf_symbol = settings.yf_symbol if not settings.is_windows else settings.primary_symbol
+    console.print(f'[cyan]Fetching {bars} bars ({tf.value}) for {settings.primary_symbol}...[/]')
+
+    df = provider.get_ohlcv(yf_symbol, tf, bars=bars)
+    provider.disconnect()
+
+    analyser = get_analyser(analyser_name, settings)
+    analysis = analyser.analyse(df, settings.primary_symbol)
+
+    console.print(f'\n[bold cyan]{analyser_name}[/bold cyan] — [bold]{analysis.symbol}[/bold]')
+    for key, val in analysis.data.items():
+        console.print(f'  {key}: {val}')
+    if analysis.notes:
+        console.print(f'  [dim]{analysis.notes}[/dim]')
+
+    if chart:
+        fig = analyser.plot(df, analysis, settings.primary_symbol)
+        dest = save_chart(fig, settings.primary_symbol, label=analyser_name)
+        console.print(f'[green]Chart saved → {dest}[/]')
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# list-analysers command
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@main.command('list-analysers')
+def list_analysers_cmd() -> None:
+    """List all available analysers."""
+    from trading_bot.analysers import list_analysers
+
+    table = Table(title='Available Analysers', show_header=True)
+    table.add_column('Name', style='cyan')
+    table.add_column('Description')
+
+    descriptions = {
+        'support_resistance': 'Swing-pivot support and resistance levels',
+        'ema_trend': 'Three-EMA alignment — uptrend / downtrend / sideways',
+        'swing_trend': 'Higher-high/higher-low swing structure trend classification',
+    }
+
+    for name in list_analysers():
         table.add_row(name, descriptions.get(name, '—'))
 
     console.print(table)

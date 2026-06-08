@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -133,12 +133,17 @@ class CompositeStrategy(BaseStrategy):
         Returns:
             A combined :class:`Signal` — BUY, SELL, or HOLD.
         """
-        applicable = [(e, e.strategy.generate_signal(df, symbol)) for e in self._entries
-                      if e.applies_to(symbol)]
+        applicable = [
+            (e, e.strategy.generate_signal(df, symbol))
+            for e in self._entries
+            if e.applies_to(symbol)
+        ]
 
         if not applicable:
             return Signal(
-                SignalType.HOLD, symbol, 0.0,
+                SignalType.HOLD,
+                symbol,
+                0.0,
                 reason=f'[composite] No strategy configured for {symbol}',
             )
 
@@ -178,10 +183,13 @@ class CompositeStrategy(BaseStrategy):
             if len(directions) == 1:
                 best_entry, best_sig = max(actionable, key=lambda t: t[1].strength)
                 return self._tag(best_sig, best_entry.strategy.name, applicable)
-            disagree = [f'{e.strategy.name}={s.signal_type.value}' for e, s in applicable
-                        if s.is_actionable]
+            disagree = [
+                f'{e.strategy.name}={s.signal_type.value}' for e, s in applicable if s.is_actionable
+            ]
             return Signal(
-                SignalType.HOLD, symbol, 0.0,
+                SignalType.HOLD,
+                symbol,
+                0.0,
                 reason=f'[composite:all_agree] Actionable strategies disagree: {disagree}',
                 metadata={'votes': {e.strategy.name: s.signal_type.value for e, s in applicable}},
             )
@@ -205,7 +213,9 @@ class CompositeStrategy(BaseStrategy):
 
         if buy_score == sell_score:
             return Signal(
-                SignalType.HOLD, symbol, 0.0,
+                SignalType.HOLD,
+                symbol,
+                0.0,
                 reason=f'[composite:{self._mode}] Tied vote (buy={buy_score}, sell={sell_score})',
                 metadata={
                     'buy_score': buy_score,
@@ -239,7 +249,9 @@ class CompositeStrategy(BaseStrategy):
         return combined
 
     @staticmethod
-    def _tag(sig: Signal, winner_name: str, applicable: list[tuple[StrategyEntry, Signal]]) -> Signal:
+    def _tag(
+        sig: Signal, winner_name: str, applicable: list[tuple[StrategyEntry, Signal]]
+    ) -> Signal:
         """Return *sig* enriched with composite metadata."""
         return Signal(
             sig.signal_type,
@@ -258,7 +270,7 @@ class CompositeStrategy(BaseStrategy):
 
     # ── Visualisation ──────────────────────────────────────────────────────
 
-    def plot_signal(self, df: pd.DataFrame, signal: Signal, symbol: str) -> 'go.Figure':
+    def plot_signal(self, df: pd.DataFrame, signal: Signal, symbol: str) -> go.Figure:
         """Delegate to the winning sub-strategy's chart.
 
         The winning strategy is identified from ``signal.metadata['winning_strategy']``
@@ -275,6 +287,7 @@ class CompositeStrategy(BaseStrategy):
         applicable = [e for e in self._entries if e.applies_to(symbol)]
         if not applicable:
             import plotly.graph_objects as go
+
             return go.Figure()
 
         winning_name: str | None = signal.metadata.get('winning_strategy')  # type: ignore[assignment]
@@ -341,8 +354,7 @@ def load_composite_strategy(config_path: str | Path, settings: Settings) -> Comp
         if strategy_name not in _REGISTRY:
             valid = ', '.join(_REGISTRY)
             raise ValueError(
-                f'Unknown strategy {strategy_name!r} in composite config. '
-                f'Valid options: {valid}'
+                f'Unknown strategy {strategy_name!r} in composite config. Valid options: {valid}'
             )
 
         symbols: list[str] = entry_cfg.get('symbols', ['*'])
@@ -355,15 +367,10 @@ def load_composite_strategy(config_path: str | Path, settings: Settings) -> Comp
         strategy_instance = _REGISTRY[strategy_name](entry_settings)
         entries.append(StrategyEntry(strategy=strategy_instance, symbols=symbols, weight=weight))
 
-        logger.info(
-            f'[CompositeConfig] Loaded {strategy_name} '
-            f'symbols={symbols} weight={weight}'
-        )
+        logger.info(f'[CompositeConfig] Loaded {strategy_name} symbols={symbols} weight={weight}')
 
     if not entries:
-        raise ValueError(
-            f'No enabled strategies found in composite config: {path}'
-        )
+        raise ValueError(f'No enabled strategies found in composite config: {path}')
 
     logger.info(f'[CompositeConfig] mode={mode} entries={len(entries)}')
     return CompositeStrategy(entries=entries, mode=mode)

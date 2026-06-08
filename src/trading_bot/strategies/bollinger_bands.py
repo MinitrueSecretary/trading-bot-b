@@ -207,8 +207,8 @@ class BollingerBandsStrategy(BaseStrategy):
         Returns:
             A :class:`plotly.graph_objects.Figure`.
         """
-        import plotly.graph_objects as go
         import pandas_ta as ta
+        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         display_n = min(len(df), 150)
@@ -235,53 +235,81 @@ class BollingerBandsStrategy(BaseStrategy):
 
         fig = make_subplots(rows=1, cols=1)
 
-        fig.add_trace(go.Candlestick(
-            x=window.index,
-            open=window['open'], high=window['high'],
-            low=window['low'], close=window['close'],
-            name=symbol,
-            increasing_line_color='#26a69a',
-            decreasing_line_color='#ef5350',
-        ))
+        fig.add_trace(
+            go.Candlestick(
+                x=window.index,
+                open=window['open'],
+                high=window['high'],
+                low=window['low'],
+                close=window['close'],
+                name=symbol,
+                increasing_line_color='#26a69a',
+                decreasing_line_color='#ef5350',
+            )
+        )
 
         if has_bands:
             # Upper band
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_upper'],
-                name='Upper', line={'color': '#3498db', 'width': 1.2},
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_upper'],
+                    name='Upper',
+                    line={'color': '#3498db', 'width': 1.2},
+                )
+            )
             # Middle band
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_middle'],
-                name='Middle', line={'color': '#95a5a6', 'width': 1, 'dash': 'dot'},
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_middle'],
+                    name='Middle',
+                    line={'color': '#95a5a6', 'width': 1, 'dash': 'dot'},
+                )
+            )
             # Lower band — fill to upper for the channel shading
-            fig.add_trace(go.Scatter(
-                x=window.index, y=window['_lower'],
-                name='Lower',
-                line={'color': '#3498db', 'width': 1.2},
-                fill='tonexty',
-                fillcolor='rgba(52, 152, 219, 0.08)',
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=window['_lower'],
+                    name='Lower',
+                    line={'color': '#3498db', 'width': 1.2},
+                    fill='tonexty',
+                    fillcolor='rgba(52, 152, 219, 0.08)',
+                )
+            )
 
         if signal.is_actionable:
             is_buy = signal.signal_type == SignalType.BUY
-            fig.add_trace(go.Scatter(
-                x=[window.index[-1]], y=[signal.entry_price],
-                mode='markers',
-                marker={
-                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
-                    'size': 14,
-                    'color': '#26a69a' if is_buy else '#ef5350',
-                },
-                name=signal.signal_type.value,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[window.index[-1]],
+                    y=[signal.entry_price],
+                    mode='markers',
+                    marker={
+                        'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                        'size': 14,
+                        'color': '#26a69a' if is_buy else '#ef5350',
+                    },
+                    name=signal.signal_type.value,
+                )
+            )
             if signal.stop_loss:
-                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
-                              annotation_text='SL', annotation_position='right')
+                fig.add_hline(
+                    y=signal.stop_loss,
+                    line_dash='dash',
+                    line_color='#ef5350',
+                    annotation_text='SL',
+                    annotation_position='right',
+                )
             if signal.take_profit:
-                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
-                              annotation_text='TP', annotation_position='right')
+                fig.add_hline(
+                    y=signal.take_profit,
+                    line_dash='dash',
+                    line_color='#26a69a',
+                    annotation_text='TP',
+                    annotation_position='right',
+                )
 
         fig.update_layout(
             title=f'{symbol} — {bb_label} | {signal.signal_type.value}',
