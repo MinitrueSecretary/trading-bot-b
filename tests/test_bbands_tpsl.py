@@ -10,7 +10,6 @@ from trading_bot.strategies.base_strategy import SignalType
 from trading_bot.strategies.bollinger_bands import BollingerBandsStrategy
 from trading_bot.utils.tpsl import BaseTPSLManager, BollingerBandsTPSLManager
 
-
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
@@ -119,17 +118,13 @@ class TestBollingerBandsTPSLManager:
         tp = mgr.calculate_tp(SignalType.BUY, float(df['close'].iloc[-1]), 'EURUSD')
         assert tp == pytest.approx(upper)
 
-    def test_buy_sl_is_below_entry(
-        self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame
-    ) -> None:
+    def test_buy_sl_is_below_entry(self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame) -> None:
         """BUY SL (lower band) should be below the entry price."""
         entry = float(df['close'].iloc[-1])
         sl = mgr.calculate_sl(SignalType.BUY, entry, 'EURUSD')
         assert sl < entry
 
-    def test_buy_tp_is_above_entry(
-        self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame
-    ) -> None:
+    def test_buy_tp_is_above_entry(self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame) -> None:
         """BUY TP (upper band) should be above the entry price."""
         entry = float(df['close'].iloc[-1])
         tp = mgr.calculate_tp(SignalType.BUY, entry, 'EURUSD')
@@ -153,17 +148,13 @@ class TestBollingerBandsTPSLManager:
         tp = mgr.calculate_tp(SignalType.SELL, float(df['close'].iloc[-1]), 'EURUSD')
         assert tp == pytest.approx(lower)
 
-    def test_sell_sl_is_above_entry(
-        self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame
-    ) -> None:
+    def test_sell_sl_is_above_entry(self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame) -> None:
         """SELL SL (upper band) should be above the entry price."""
         entry = float(df['close'].iloc[-1])
         sl = mgr.calculate_sl(SignalType.SELL, entry, 'EURUSD')
         assert sl > entry
 
-    def test_sell_tp_is_below_entry(
-        self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame
-    ) -> None:
+    def test_sell_tp_is_below_entry(self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame) -> None:
         """SELL TP (lower band) should be below the entry price."""
         entry = float(df['close'].iloc[-1])
         tp = mgr.calculate_tp(SignalType.SELL, entry, 'EURUSD')
@@ -214,7 +205,9 @@ class TestBollingerBandsTPSLManager:
         sl = mgr_floor.calculate_sl(SignalType.SELL, entry, 'EURUSD')
         assert sl >= entry + 50 * 0.0001
 
-    def test_min_sl_pips_zero_no_effect(self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame) -> None:
+    def test_min_sl_pips_zero_no_effect(
+        self, mgr: BollingerBandsTPSLManager, df: pd.DataFrame
+    ) -> None:
         """min_sl_pips=0.0 should not alter the band-derived SL."""
         lower, _ = _live_bands(df)
         entry = float(df['close'].iloc[-1])
@@ -359,7 +352,9 @@ class TestBollingerBandsStrategy:
         df['low'] = df[['low', 'close', 'open']].min(axis=1)
 
         # Compute current bands
-        bbands = ta.bbands(df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev)
+        bbands = ta.bbands(
+            df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev
+        )
         cols = bbands.columns.tolist()
         lower_col = next(c for c in cols if c.startswith('BBL_'))
         lower = float(bbands[lower_col].iloc[-1])
@@ -394,7 +389,9 @@ class TestBollingerBandsStrategy:
         df['high'] = df[['high', 'close', 'open']].max(axis=1)
         df['low'] = df[['low', 'close', 'open']].min(axis=1)
 
-        bbands = ta.bbands(df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev)
+        bbands = ta.bbands(
+            df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev
+        )
         cols = bbands.columns.tolist()
         upper_col = next(c for c in cols if c.startswith('BBU_'))
         upper = float(bbands[upper_col].iloc[-1])
@@ -426,11 +423,18 @@ class TestBollingerBandsStrategy:
         close = np.full(n, 1.1000) + np.linspace(0, 0.001, n)
         index = pd.date_range('2024-01-01', periods=n, freq='h', tz='UTC')
         df = pd.DataFrame(
-            {'open': close, 'high': close + 0.001, 'low': close - 0.001,
-             'close': close.copy(), 'volume': np.ones(n) * 1000.0},
+            {
+                'open': close,
+                'high': close + 0.001,
+                'low': close - 0.001,
+                'close': close.copy(),
+                'volume': np.ones(n) * 1000.0,
+            },
             index=index,
         )
-        bbands = ta.bbands(df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev)
+        bbands = ta.bbands(
+            df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev
+        )
         cols = bbands.columns.tolist()
         lower_col = next(c for c in cols if c.startswith('BBL_'))
         lower = float(bbands[lower_col].iloc[-1])
@@ -450,11 +454,18 @@ class TestBollingerBandsStrategy:
         close = np.full(n, 1.1000)
         index = pd.date_range('2024-01-01', periods=n, freq='h', tz='UTC')
         df = pd.DataFrame(
-            {'open': close, 'high': close + 0.001, 'low': close - 0.001,
-             'close': close.copy(), 'volume': np.ones(n) * 1000.0},
+            {
+                'open': close,
+                'high': close + 0.001,
+                'low': close - 0.001,
+                'close': close.copy(),
+                'volume': np.ones(n) * 1000.0,
+            },
             index=index,
         )
-        bbands = ta.bbands(df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev)
+        bbands = ta.bbands(
+            df['close'], length=period, lower_std=settings.bb_std_dev, upper_std=settings.bb_std_dev
+        )
         cols = bbands.columns.tolist()
         lower_col = next(c for c in cols if c.startswith('BBL_'))
         lower = float(bbands[lower_col].iloc[-1])

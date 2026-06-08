@@ -135,8 +135,8 @@ class SMACrossoverStrategy(BaseStrategy):
         Returns:
             A :class:`plotly.graph_objects.Figure`.
         """
-        import plotly.graph_objects as go
         import pandas_ta as ta
+        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         display_n = min(len(df), 100)
@@ -152,41 +152,66 @@ class SMACrossoverStrategy(BaseStrategy):
 
         fig = make_subplots(rows=1, cols=1)
 
-        fig.add_trace(go.Candlestick(
-            x=window.index,
-            open=window['open'], high=window['high'],
-            low=window['low'], close=window['close'],
-            name=symbol,
-            increasing_line_color='#26a69a',
-            decreasing_line_color='#ef5350',
-        ))
-        fig.add_trace(go.Scatter(
-            x=window.index, y=window[fast_col],
-            name=f'SMA{self._fast}', line={'color': '#f39c12', 'width': 1.5},
-        ))
-        fig.add_trace(go.Scatter(
-            x=window.index, y=window[slow_col],
-            name=f'SMA{self._slow}', line={'color': '#3498db', 'width': 1.5},
-        ))
+        fig.add_trace(
+            go.Candlestick(
+                x=window.index,
+                open=window['open'],
+                high=window['high'],
+                low=window['low'],
+                close=window['close'],
+                name=symbol,
+                increasing_line_color='#26a69a',
+                decreasing_line_color='#ef5350',
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=window.index,
+                y=window[fast_col],
+                name=f'SMA{self._fast}',
+                line={'color': '#f39c12', 'width': 1.5},
+            )
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=window.index,
+                y=window[slow_col],
+                name=f'SMA{self._slow}',
+                line={'color': '#3498db', 'width': 1.5},
+            )
+        )
 
         if signal.is_actionable:
             is_buy = signal.signal_type == SignalType.BUY
-            fig.add_trace(go.Scatter(
-                x=[window.index[-1]], y=[signal.entry_price],
-                mode='markers',
-                marker={
-                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
-                    'size': 14,
-                    'color': '#26a69a' if is_buy else '#ef5350',
-                },
-                name=signal.signal_type.value,
-            ))
+            fig.add_trace(
+                go.Scatter(
+                    x=[window.index[-1]],
+                    y=[signal.entry_price],
+                    mode='markers',
+                    marker={
+                        'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                        'size': 14,
+                        'color': '#26a69a' if is_buy else '#ef5350',
+                    },
+                    name=signal.signal_type.value,
+                )
+            )
             if signal.stop_loss:
-                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
-                              annotation_text='SL', annotation_position='right')
+                fig.add_hline(
+                    y=signal.stop_loss,
+                    line_dash='dash',
+                    line_color='#ef5350',
+                    annotation_text='SL',
+                    annotation_position='right',
+                )
             if signal.take_profit:
-                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
-                              annotation_text='TP', annotation_position='right')
+                fig.add_hline(
+                    y=signal.take_profit,
+                    line_dash='dash',
+                    line_color='#26a69a',
+                    annotation_text='TP',
+                    annotation_position='right',
+                )
 
         fig.update_layout(
             title=f'{symbol} — SMA {self._fast}/{self._slow} | {signal.signal_type.value}',

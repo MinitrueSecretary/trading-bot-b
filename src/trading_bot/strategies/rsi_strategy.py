@@ -144,8 +144,8 @@ class RSIStrategy(BaseStrategy):
         Returns:
             A :class:`plotly.graph_objects.Figure`.
         """
-        import plotly.graph_objects as go
         import pandas_ta as ta
+        import plotly.graph_objects as go
         from plotly.subplots import make_subplots
 
         display_n = min(len(df), 200)
@@ -160,70 +160,130 @@ class RSIStrategy(BaseStrategy):
         rsi_label = f'RSI({self._period})'
 
         fig = make_subplots(
-            rows=2, cols=1, shared_xaxes=True,
+            rows=2,
+            cols=1,
+            shared_xaxes=True,
             vertical_spacing=0.06,
             row_heights=[0.6, 0.4],
             subplot_titles=[symbol, rsi_label],
         )
 
         # ── Row 1: price + SMA200 ─────────────────────────────────────────
-        fig.add_trace(go.Candlestick(
-            x=window.index,
-            open=window['open'], high=window['high'],
-            low=window['low'], close=window['close'],
-            name=symbol,
-            increasing_line_color='#26a69a',
-            decreasing_line_color='#ef5350',
-        ), row=1, col=1)
+        fig.add_trace(
+            go.Candlestick(
+                x=window.index,
+                open=window['open'],
+                high=window['high'],
+                low=window['low'],
+                close=window['close'],
+                name=symbol,
+                increasing_line_color='#26a69a',
+                decreasing_line_color='#ef5350',
+            ),
+            row=1,
+            col=1,
+        )
 
-        fig.add_trace(go.Scatter(
-            x=window.index, y=window['_sma200'],
-            name='SMA200', line={'color': '#9b59b6', 'width': 1.5},
-        ), row=1, col=1)
+        fig.add_trace(
+            go.Scatter(
+                x=window.index,
+                y=window['_sma200'],
+                name='SMA200',
+                line={'color': '#9b59b6', 'width': 1.5},
+            ),
+            row=1,
+            col=1,
+        )
 
         if signal.is_actionable:
             is_buy = signal.signal_type == SignalType.BUY
-            fig.add_trace(go.Scatter(
-                x=[window.index[-1]], y=[signal.entry_price],
-                mode='markers',
-                marker={
-                    'symbol': 'triangle-up' if is_buy else 'triangle-down',
-                    'size': 14,
-                    'color': '#26a69a' if is_buy else '#ef5350',
-                },
-                name=signal.signal_type.value,
-            ), row=1, col=1)
+            fig.add_trace(
+                go.Scatter(
+                    x=[window.index[-1]],
+                    y=[signal.entry_price],
+                    mode='markers',
+                    marker={
+                        'symbol': 'triangle-up' if is_buy else 'triangle-down',
+                        'size': 14,
+                        'color': '#26a69a' if is_buy else '#ef5350',
+                    },
+                    name=signal.signal_type.value,
+                ),
+                row=1,
+                col=1,
+            )
             if signal.stop_loss:
-                fig.add_hline(y=signal.stop_loss, line_dash='dash', line_color='#ef5350',
-                              annotation_text='SL', annotation_position='right', row=1, col=1)
+                fig.add_hline(
+                    y=signal.stop_loss,
+                    line_dash='dash',
+                    line_color='#ef5350',
+                    annotation_text='SL',
+                    annotation_position='right',
+                    row=1,
+                    col=1,
+                )
             if signal.take_profit:
-                fig.add_hline(y=signal.take_profit, line_dash='dash', line_color='#26a69a',
-                              annotation_text='TP', annotation_position='right', row=1, col=1)
+                fig.add_hline(
+                    y=signal.take_profit,
+                    line_dash='dash',
+                    line_color='#26a69a',
+                    annotation_text='TP',
+                    annotation_position='right',
+                    row=1,
+                    col=1,
+                )
 
         # ── Row 2: RSI ────────────────────────────────────────────────────
-        fig.add_trace(go.Scatter(
-            x=window.index, y=window['_rsi'],
-            name=rsi_label, line={'color': '#e67e22', 'width': 1.5},
-        ), row=2, col=1)
+        fig.add_trace(
+            go.Scatter(
+                x=window.index,
+                y=window['_rsi'],
+                name=rsi_label,
+                line={'color': '#e67e22', 'width': 1.5},
+            ),
+            row=2,
+            col=1,
+        )
 
         # Filled region between RSI and the triggered threshold for visual clarity
         if signal.is_actionable:
             is_buy = signal.signal_type == SignalType.BUY
             threshold = self._oversold if is_buy else self._overbought
             rsi_series = window['_rsi'].fillna(50)
-            fill_y = rsi_series.clip(upper=threshold) if is_buy else rsi_series.clip(lower=threshold)
-            fig.add_trace(go.Scatter(
-                x=window.index, y=fill_y,
-                fill='tonexty', fillcolor='rgba(230, 126, 34, 0.15)',
-                line={'width': 0}, showlegend=False,
-            ), row=2, col=1)
+            fill_y = (
+                rsi_series.clip(upper=threshold) if is_buy else rsi_series.clip(lower=threshold)
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=window.index,
+                    y=fill_y,
+                    fill='tonexty',
+                    fillcolor='rgba(230, 126, 34, 0.15)',
+                    line={'width': 0},
+                    showlegend=False,
+                ),
+                row=2,
+                col=1,
+            )
 
-        fig.add_hline(y=self._overbought, line_dash='dash', line_color='#ef5350',
-                      annotation_text=str(int(self._overbought)), annotation_position='right',
-                      row=2, col=1)
-        fig.add_hline(y=self._oversold, line_dash='dash', line_color='#26a69a',
-                      annotation_text=str(int(self._oversold)), annotation_position='right',
-                      row=2, col=1)
+        fig.add_hline(
+            y=self._overbought,
+            line_dash='dash',
+            line_color='#ef5350',
+            annotation_text=str(int(self._overbought)),
+            annotation_position='right',
+            row=2,
+            col=1,
+        )
+        fig.add_hline(
+            y=self._oversold,
+            line_dash='dash',
+            line_color='#26a69a',
+            annotation_text=str(int(self._oversold)),
+            annotation_position='right',
+            row=2,
+            col=1,
+        )
         fig.add_hline(y=50, line_dash='dot', line_color='gray', opacity=0.4, row=2, col=1)
 
         fig.update_yaxes(range=[0, 100], row=2, col=1)
