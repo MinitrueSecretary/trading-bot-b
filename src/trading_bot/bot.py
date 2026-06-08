@@ -172,6 +172,7 @@ class TradingBot:
         tmp_path: Path | None = None
         try:
             import plotly.io as pio
+
             fig = self._strategy.plot_signal(df, signal, symbol)
             with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
                 tmp_path = Path(tmp.name)

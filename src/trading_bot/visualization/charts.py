@@ -288,6 +288,7 @@ def save_png(
     # through plotly's own JSON serializer (which does) to normalise all
     # timestamp values to ISO strings before handing the figure to kaleido.
     import plotly.io as pio
+
     fig = pio.from_json(fig.to_json())
 
     fig.write_image(str(dest), width=width, height=height)
