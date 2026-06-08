@@ -489,7 +489,7 @@ def fetch_ohlcv(
     dest.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(dest)
 
-    console.print(f'[green]✓[/green] {len(df)} bars saved → [bold]{dest}[/bold]')
+    console.print(f'[green]OK[/green] {len(df)} bars saved -> [bold]{dest}[/bold]')
 
 
 # ──────────────────────────────────────────────────────────────────────────────

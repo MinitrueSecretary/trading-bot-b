@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 
 from trading_bot.config import Settings, Timeframe
@@ -143,11 +144,14 @@ class MT5Provider(BaseDataProvider):
         mt5_tf = _MT5_TF_MAP[timeframe.value]
         mt5_symbol = self._settings.mt5_symbol_for(symbol)
 
+        # Symbol must be selected in Market Watch before history is accessible
+        mt5.symbol_select(mt5_symbol, True)  # type: ignore[union-attr]
+
         if start is not None:
-            date_from = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
+            date_from = (start if start.tzinfo is None else start.replace(tzinfo=None))
             raw_end = end if end is not None else datetime.now(UTC)
-            date_to = raw_end if raw_end.tzinfo is not None else raw_end.replace(tzinfo=UTC)
-            rates = mt5.copy_rates_range(mt5_symbol, mt5_tf, date_from, date_to)  # type: ignore[union-attr]
+            date_to = (raw_end if raw_end.tzinfo is None else raw_end.replace(tzinfo=None))
+            rates = self._chunked_rates_range(mt5, mt5_symbol, mt5_tf, date_from, date_to)
         else:
             rates = mt5.copy_rates_from_pos(mt5_symbol, mt5_tf, 0, bars)  # type: ignore[union-attr]
 
@@ -169,6 +173,39 @@ class MT5Provider(BaseDataProvider):
             inplace=True,
         )
         return df[['open', 'high', 'low', 'close', 'volume']].copy()
+
+    def _chunked_rates_range(
+        self,
+        mt5: object,
+        mt5_symbol: str,
+        mt5_tf: int,
+        date_from: datetime,
+        date_to: datetime,
+        chunk_days: int = 90,
+    ) -> np.ndarray | None:
+        """Fetch rates in chunks to stay within MT5's per-call bar limit.
+
+        Args:
+            mt5: Live MetaTrader5 module reference.
+            mt5_symbol: Broker symbol name.
+            mt5_tf: MT5 timeframe integer constant.
+            date_from: Naive UTC start datetime.
+            date_to: Naive UTC end datetime.
+            chunk_days: Window size in days per request.
+
+        Returns:
+            Concatenated structured array, or ``None`` if nothing was returned.
+        """
+        delta = timedelta(days=chunk_days)
+        chunks: list[np.ndarray] = []
+        window_start = date_from
+        while window_start < date_to:
+            window_end = min(window_start + delta, date_to)
+            rates = mt5.copy_rates_range(mt5_symbol, mt5_tf, window_start, window_end)  # type: ignore[union-attr]
+            if rates is not None and len(rates) > 0:
+                chunks.append(rates)
+            window_start = window_end + timedelta(seconds=1)
+        return np.concatenate(chunks) if chunks else None
 
     def get_current_price(self, symbol: str) -> float:
         """Return the latest ask price for *symbol* from MT5.
