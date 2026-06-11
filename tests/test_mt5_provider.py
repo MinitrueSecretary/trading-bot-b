@@ -11,10 +11,10 @@ import pytest
 from trading_bot.config import Settings, Timeframe
 from trading_bot.data.mt5_provider import MT5Provider
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_rates(n: int = 10) -> np.ndarray:
     """Return a minimal structured array mimicking MT5 rates output."""
@@ -42,6 +42,7 @@ def _make_rates(n: int = 10) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def settings() -> Settings:
@@ -82,10 +83,9 @@ def provider(settings: Settings, mock_mt5: MagicMock) -> MT5Provider:
 # get_ohlcv — range mode (start / end)
 # ---------------------------------------------------------------------------
 
+
 class TestGetOhlcvRangeMode:
-    def test_selects_symbol_before_fetch(
-        self, provider: MT5Provider, mock_mt5: MagicMock
-    ) -> None:
+    def test_selects_symbol_before_fetch(self, provider: MT5Provider, mock_mt5: MagicMock) -> None:
         mock_mt5.copy_rates_range.return_value = _make_rates()
         start = datetime(2025, 1, 1, tzinfo=UTC)
         end = datetime(2025, 1, 2, tzinfo=UTC)
@@ -138,9 +138,7 @@ class TestGetOhlcvRangeMode:
         _, _, _, date_to = mock_mt5.copy_rates_range.call_args[0]
         assert date_to.tzinfo is None
 
-    def test_raises_on_none_rates(
-        self, provider: MT5Provider, mock_mt5: MagicMock
-    ) -> None:
+    def test_raises_on_none_rates(self, provider: MT5Provider, mock_mt5: MagicMock) -> None:
         mock_mt5.copy_rates_range.return_value = None
         mock_mt5.last_error.return_value = (-2, 'Invalid params')
         start = datetime(2025, 1, 1, tzinfo=UTC)
@@ -148,9 +146,7 @@ class TestGetOhlcvRangeMode:
         with pytest.raises(RuntimeError, match='MT5 returned no data for XAUUSDm'):
             provider.get_ohlcv('XAUUSD', Timeframe.M5, start=start)
 
-    def test_raises_on_empty_rates(
-        self, provider: MT5Provider, mock_mt5: MagicMock
-    ) -> None:
+    def test_raises_on_empty_rates(self, provider: MT5Provider, mock_mt5: MagicMock) -> None:
         mock_mt5.copy_rates_range.return_value = _make_rates(0)
         mock_mt5.last_error.return_value = (-4, 'Not found')
         start = datetime(2025, 1, 1, tzinfo=UTC)
@@ -163,10 +159,9 @@ class TestGetOhlcvRangeMode:
 # get_ohlcv — bars mode (no start)
 # ---------------------------------------------------------------------------
 
+
 class TestGetOhlcvBarsMode:
-    def test_calls_copy_rates_from_pos(
-        self, provider: MT5Provider, mock_mt5: MagicMock
-    ) -> None:
+    def test_calls_copy_rates_from_pos(self, provider: MT5Provider, mock_mt5: MagicMock) -> None:
         n = 100
         mock_mt5.copy_rates_from_pos.return_value = _make_rates(n)
 
@@ -175,9 +170,7 @@ class TestGetOhlcvBarsMode:
         mock_mt5.copy_rates_from_pos.assert_called_once_with('XAUUSDm', 5, 0, n)
         assert len(df) == n
 
-    def test_selects_symbol_in_bars_mode(
-        self, provider: MT5Provider, mock_mt5: MagicMock
-    ) -> None:
+    def test_selects_symbol_in_bars_mode(self, provider: MT5Provider, mock_mt5: MagicMock) -> None:
         mock_mt5.copy_rates_from_pos.return_value = _make_rates(50)
 
         provider.get_ohlcv('XAUUSD', Timeframe.M5, bars=50)
@@ -188,6 +181,7 @@ class TestGetOhlcvBarsMode:
 # ---------------------------------------------------------------------------
 # Connection guard
 # ---------------------------------------------------------------------------
+
 
 class TestConnectionGuard:
     def test_raises_when_not_connected(self, settings: Settings) -> None:

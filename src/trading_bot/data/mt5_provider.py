@@ -148,9 +148,9 @@ class MT5Provider(BaseDataProvider):
         mt5.symbol_select(mt5_symbol, True)  # type: ignore[union-attr]
 
         if start is not None:
-            date_from = (start if start.tzinfo is None else start.replace(tzinfo=None))
+            date_from = start if start.tzinfo is None else start.replace(tzinfo=None)
             raw_end = end if end is not None else datetime.now(UTC)
-            date_to = (raw_end if raw_end.tzinfo is None else raw_end.replace(tzinfo=None))
+            date_to = raw_end if raw_end.tzinfo is None else raw_end.replace(tzinfo=None)
             rates = self._chunked_rates_range(mt5, mt5_symbol, mt5_tf, date_from, date_to)
         else:
             rates = mt5.copy_rates_from_pos(mt5_symbol, mt5_tf, 0, bars)  # type: ignore[union-attr]
