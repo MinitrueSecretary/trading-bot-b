@@ -9,15 +9,12 @@ Both functions are optional — omit either one to fall back to the inline
 CLI flags (--strategy, --lot-size, --risk-amount, etc.) or .env defaults.
 """
 
+import trading_bot.strategies as S
+import trading_bot.utils.lot_size as lot_size
 from trading_bot.config import Settings
-from trading_bot.strategies.composite import CombineMode, CompositeStrategy, StrategyEntry
-from trading_bot.strategies.macd_strategy import MACDStrategy
-from trading_bot.strategies.rsi_strategy import RSIStrategy
-from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
-from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager
 
 
-def build_strategy(settings: Settings) -> CompositeStrategy:
+def build_strategy(settings: Settings) -> S.CompositeStrategy:
     """Build and return the composite strategy.
 
     Args:
@@ -26,26 +23,26 @@ def build_strategy(settings: Settings) -> CompositeStrategy:
     Returns:
         Configured :class:`~trading_bot.strategies.composite.CompositeStrategy`.
     """
-    return CompositeStrategy(
+    return S.CompositeStrategy(
         entries=[
             # ── SMA Crossover ─────────────────────────────────────────────
-            StrategyEntry(
-                strategy=SMACrossoverStrategy(
-                    settings.model_copy(
-                        update={
-                            'stop_loss_pips': 30,
-                            'take_profit_pips': 60,
-                            'sma_fast': 20,
-                            'sma_slow': 50,
-                        }
-                    )
-                ),
-                symbols=['*'],
-                weight=1.0,
-            ),
+            # S.StrategyEntry(
+            #     strategy=S.SMACrossoverStrategy(
+            #         settings.model_copy(
+            #             update={
+            #                 'stop_loss_pips': 30,
+            #                 'take_profit_pips': 60,
+            #                 'sma_fast': 20,
+            #                 'sma_slow': 50,
+            #             }
+            #         )
+            #     ),
+            #     symbols=['*'],
+            #     weight=1.0,
+            # ),
             # ── RSI with trend filter ─────────────────────────────────────
-            StrategyEntry(
-                strategy=RSIStrategy(
+            S.StrategyEntry(
+                strategy=S.RSIStrategy(
                     settings.model_copy(
                         update={
                             'stop_loss_pips': 25,
@@ -60,8 +57,8 @@ def build_strategy(settings: Settings) -> CompositeStrategy:
                 weight=2.0,
             ),
             # ── MACD histogram crossover ──────────────────────────────────
-            StrategyEntry(
-                strategy=MACDStrategy(
+            S.StrategyEntry(
+                strategy=S.MACDStrategy(
                     settings.model_copy(
                         update={
                             'stop_loss_pips': 35,
@@ -76,8 +73,8 @@ def build_strategy(settings: Settings) -> CompositeStrategy:
                 weight=1.5,
             ),
             # ── Bollinger Bands mean-reversion (disabled) ─────────────────
-            # StrategyEntry(
-            #     strategy=BollingerBandsStrategy(
+            # S.StrategyEntry(
+            #     strategy=S.BollingerBandsStrategy(
             #         settings.model_copy(update={
             #             'stop_loss_pips': 100,
             #             'take_profit_pips': 200,
@@ -89,8 +86,8 @@ def build_strategy(settings: Settings) -> CompositeStrategy:
             #     weight=1.0,
             # ),
             # ── RSI Divergence (disabled) ─────────────────────────────────
-            # StrategyEntry(
-            #     strategy=RSIDivergenceStrategy(
+            # S.StrategyEntry(
+            #     strategy=S.RSIDivergenceStrategy(
             #         settings.model_copy(update={
             #             'stop_loss_pips': 30,
             #             'take_profit_pips': 60,
@@ -105,11 +102,11 @@ def build_strategy(settings: Settings) -> CompositeStrategy:
             #     weight=1.5,
             # ),
         ],
-        mode=CombineMode.MAJORITY_VOTE,
+        mode=S.CombineMode.MAJORITY_VOTE,
     )
 
 
-def build_lot_size_manager() -> BaseLotSizeManager:
+def build_lot_size_manager() -> lot_size.BaseLotSizeManager:
     """Return the configured lot size manager.
 
     Returns:
@@ -117,8 +114,7 @@ def build_lot_size_manager() -> BaseLotSizeManager:
         subclass.
     """
     # ── Option A: fixed lot size ───────────────────────────────────────────
-    return FixedLotSizeManager(lot_size=0.1)
+    # return lot_size.FixedLotSizeManager(lot_size=0.1)
 
     # ── Option B: fixed dollar risk per trade ──────────────────────────────
-    # from trading_bot.utils.lot_size import FixedRiskLotSizeManager
-    # return FixedRiskLotSizeManager(risk_amount=100.0, min_lot=0.01)
+    return lot_size.FixedRiskLotSizeManager(risk_amount=50.0, min_lot=0.01)
