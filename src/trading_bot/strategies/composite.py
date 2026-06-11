@@ -303,42 +303,92 @@ class CompositeStrategy(BaseStrategy):
 
 
 def load_composite_strategy(config_path: str | Path, settings: Settings) -> CompositeStrategy:
-    """Build a :class:`CompositeStrategy` from a YAML configuration file.
+    """Build a :class:`CompositeStrategy` from a config file.
 
-    YAML schema::
+    Supports two formats detected by file extension:
 
-        mode: majority_vote   # majority_vote | weighted_vote | first_signal | all_agree
+    **Python** (``.py``):
+        The module must expose a ``build(settings: Settings) -> CompositeStrategy``
+        function.  The function receives the full ``Settings`` object so it can
+        call ``settings.model_copy(update={...})`` for per-entry overrides.
 
-        strategies:
-          - strategy: sma_crossover
-            enabled: true          # omit or true to include; false to skip
-            symbols: ["*"]         # ["*"] = all symbols; or e.g. ["EURUSD","GBPUSD"]
-            weight: 1.0            # relative voting weight (default 1.0)
-            params:                # override any BOT_* settings field
-              stop_loss_pips: 30
-              take_profit_pips: 60
-              sma_fast: 20
-              sma_slow: 50
+    **YAML** (``.yaml`` / ``.yml``):
+        Legacy format.  Schema::
 
-    ``params`` keys must match :class:`~trading_bot.config.Settings` field names.
-    Unknown keys are silently ignored (``Settings`` has ``extra='ignore'``).
+            mode: majority_vote   # majority_vote | weighted_vote | first_signal | all_agree
+
+            strategies:
+              - strategy: sma_crossover
+                enabled: true          # omit or true to include; false to skip
+                symbols: ["*"]         # ["*"] = all symbols; or e.g. ["EURUSD","GBPUSD"]
+                weight: 1.0            # relative voting weight (default 1.0)
+                params:                # override any BOT_* settings field
+                  stop_loss_pips: 30
+                  sma_fast: 20
+
+        ``params`` keys must match :class:`~trading_bot.config.Settings` field names.
+        Unknown keys are silently ignored (``Settings`` has ``extra='ignore'``).
 
     Args:
-        config_path: Path to the YAML file.
-        settings: Base settings object; ``params`` overrides are applied on top.
+        config_path: Path to the ``.py`` or ``.yaml`` / ``.yml`` file.
+        settings: Base settings object forwarded to the loader.
 
     Returns:
         A fully configured :class:`CompositeStrategy`.
 
     Raises:
-        FileNotFoundError: If the YAML file does not exist.
-        ValueError: If an unknown strategy name is used or no enabled entries remain.
+        FileNotFoundError: If the config file does not exist.
+        ValueError: If the file extension is unsupported, an unknown strategy
+            name is used, the ``.py`` module has no ``build`` function, or no
+            enabled entries remain (YAML only).
     """
-    from trading_bot.strategies import _REGISTRY  # avoid circular at module level
-
     path = Path(config_path)
     if not path.exists():
         raise FileNotFoundError(f'Strategy config not found: {path}')
+
+    if path.suffix == '.py':
+        return _load_from_py(path, settings)
+    if path.suffix in ('.yaml', '.yml'):
+        return _load_from_yaml(path, settings)
+
+    raise ValueError(
+        f'Unsupported strategy config extension {path.suffix!r}. Use .py or .yaml / .yml.'
+    )
+
+
+def _load_from_py(path: Path, settings: Settings) -> CompositeStrategy:
+    """Load a composite strategy from a Python module.
+
+    The module must define ``build(settings: Settings) -> CompositeStrategy``.
+    """
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location('_strategy_config', path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f'Could not load Python strategy config: {path}')
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+
+    build_fn = getattr(module, 'build', None)
+    if build_fn is None or not callable(build_fn):
+        raise ValueError(f'{path} must define a callable `build(settings) -> CompositeStrategy`.')
+
+    result = build_fn(settings)
+    if not isinstance(result, CompositeStrategy):
+        raise ValueError(
+            f'`build()` in {path} must return a CompositeStrategy, got {type(result).__name__}.'
+        )
+
+    logger.info(
+        f'[CompositeConfig] Loaded from {path.name}: {len(result.entries)} entries, mode={result.mode}'
+    )
+    return result
+
+
+def _load_from_yaml(path: Path, settings: Settings) -> CompositeStrategy:
+    """Load a composite strategy from a YAML config file (legacy format)."""
+    from trading_bot.strategies import _REGISTRY  # avoid circular at module level
 
     with path.open() as fh:
         raw: dict = yaml.safe_load(fh) or {}
@@ -361,9 +411,7 @@ def load_composite_strategy(config_path: str | Path, settings: Settings) -> Comp
         weight: float = float(entry_cfg.get('weight', 1.0))
         params: dict = entry_cfg.get('params', {})
 
-        # Apply param overrides on top of base settings
         entry_settings = settings.model_copy(update=params) if params else settings
-
         strategy_instance = _REGISTRY[strategy_name](entry_settings)
         entries.append(StrategyEntry(strategy=strategy_instance, symbols=symbols, weight=weight))
 
