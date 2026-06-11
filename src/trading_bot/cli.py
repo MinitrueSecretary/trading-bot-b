@@ -24,7 +24,7 @@ def main() -> None:
 
 @main.command()
 @click.option('--dry-run/--live', default=None, help='Override dry_run setting.')
-@click.option('--strategy', default=None, help='Strategy name (overrides config).')
+@click.option('--strategy', default=None, help='Strategy name. Mutually exclusive with --config.')
 @click.option(
     '--sl-pips',
     'sl_pips',
@@ -44,34 +44,38 @@ def main() -> None:
     'lot_size',
     default=None,
     type=float,
-    help='Fixed lot size per trade (FixedLotSizeManager). Mutually exclusive with --risk-amount and --risk-pct.',
+    help='Fixed lot size per trade. Mutually exclusive with --risk-amount, --risk-pct, and --config.',
 )
 @click.option(
     '--risk-amount',
     'risk_amount',
     default=None,
     type=float,
-    help='Fixed dollar amount at risk per trade (FixedRiskLotSizeManager). Mutually exclusive with --lot-size and --risk-pct.',
+    help='Fixed dollar amount at risk per trade. Mutually exclusive with --lot-size, --risk-pct, and --config.',
 )
 @click.option(
     '--risk-pct',
     'risk_pct',
     default=None,
     type=float,
-    help='Percentage of balance to risk per trade (overrides BOT_RISK_PER_TRADE_PCT). Mutually exclusive with --lot-size and --risk-amount.',
+    help='Percentage of balance to risk per trade (overrides BOT_RISK_PER_TRADE_PCT). Mutually exclusive with --lot-size, --risk-amount, and --config.',
+)
+@click.option(
+    '--config',
+    'bot_config',
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help=(
+        'Path to a Python bot config file (e.g. bot_config.py). '
+        'May define build_strategy(settings) and/or build_lot_size_manager(). '
+        'Mutually exclusive with --strategy, --lot-size, --risk-amount, and --risk-pct.'
+    ),
 )
 @click.option(
     '--signal-discord/--no-signal-discord',
     'signal_discord',
     default=False,
     help='Send a strategy-specific signal chart to Discord on each actionable signal (requires BOT_DISCORD_WEBHOOK_URL and kaleido).',
-)
-@click.option(
-    '--strategy-config',
-    'strategy_config',
-    default=None,
-    type=click.Path(exists=True, dir_okay=False),
-    help='Path to a YAML composite-strategy config file. Overrides --strategy.',
 )
 def trade(
     dry_run: bool | None,
@@ -81,57 +85,77 @@ def trade(
     lot_size: float | None,
     risk_amount: float | None,
     risk_pct: float | None,
+    bot_config: str | None,
     signal_discord: bool,
-    strategy_config: str | None,
 ) -> None:
     """Start the live / paper trading loop."""
     from trading_bot.bot import TradingBot
-    from trading_bot.strategies import load_composite_strategy
+    from trading_bot.utils.bot_config_loader import load_bot_config
     from trading_bot.utils.lot_size import (
         BaseLotSizeManager,
         FixedLotSizeManager,
         FixedRiskLotSizeManager,
     )
 
-    if strategy_config is not None and strategy is not None:
-        raise click.UsageError('--strategy-config and --strategy are mutually exclusive.')
-
-    exclusives = sum(x is not None for x in (lot_size, risk_amount, risk_pct))
-    if exclusives > 1:
-        raise click.UsageError('--lot-size, --risk-amount, and --risk-pct are mutually exclusive.')
+    if bot_config is not None:
+        conflicts = [
+            n
+            for n, v in (
+                ('--strategy', strategy),
+                ('--lot-size', lot_size),
+                ('--risk-amount', risk_amount),
+                ('--risk-pct', risk_pct),
+            )
+            if v is not None
+        ]
+        if conflicts:
+            raise click.UsageError(f'--config is mutually exclusive with: {", ".join(conflicts)}')
+    else:
+        exclusives = sum(x is not None for x in (lot_size, risk_amount, risk_pct))
+        if exclusives > 1:
+            raise click.UsageError(
+                '--lot-size, --risk-amount, and --risk-pct are mutually exclusive.'
+            )
 
     settings = get_settings()
     if dry_run is not None:
         settings = settings.model_copy(update={'dry_run': dry_run})
-    if strategy is not None:
-        settings = settings.model_copy(update={'strategy_name': strategy})
     if sl_pips is not None:
         settings = settings.model_copy(update={'stop_loss_pips': sl_pips})
     if tp_pips is not None:
         settings = settings.model_copy(update={'take_profit_pips': tp_pips})
-    if risk_pct is not None:
-        settings = settings.model_copy(update={'risk_per_trade_pct': risk_pct})
-
-    lot_mgr: BaseLotSizeManager | None = None
-    if lot_size is not None:
-        lot_mgr = FixedLotSizeManager(lot_size=lot_size)
-        console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
-    elif risk_amount is not None:
-        lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
-        console.print(
-            f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]'
-        )
-    else:
-        pct = settings.risk_per_trade_pct
-        console.print(f'[cyan]Lot sizing: percentage risk ({pct}% of balance)[/]')
 
     composite_strat = None
-    if strategy_config is not None:
-        composite_strat = load_composite_strategy(strategy_config, settings)
-        console.print(
-            f'[cyan]Strategy: CompositeStrategy ({len(composite_strat.entries)} entries, '
-            f'mode={composite_strat.mode})[/]'
-        )
+    lot_mgr: BaseLotSizeManager | None = None
+
+    if bot_config is not None:
+        composite_strat, lot_mgr = load_bot_config(bot_config, settings)
+        if composite_strat is not None:
+            console.print(
+                f'[cyan]Strategy: CompositeStrategy ({len(composite_strat.entries)} entries, '
+                f'mode={composite_strat.mode}) (from {bot_config})[/]'
+            )
+        if lot_mgr is not None:
+            console.print(f'[cyan]Lot sizing: {type(lot_mgr).__name__} (from {bot_config})[/]')
+        else:
+            pct = settings.risk_per_trade_pct
+            console.print(f'[cyan]Lot sizing: percentage risk ({pct}% of balance)[/]')
+    else:
+        if strategy is not None:
+            settings = settings.model_copy(update={'strategy_name': strategy})
+        if risk_pct is not None:
+            settings = settings.model_copy(update={'risk_per_trade_pct': risk_pct})
+        if lot_size is not None:
+            lot_mgr = FixedLotSizeManager(lot_size=lot_size)
+            console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
+        elif risk_amount is not None:
+            lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
+            console.print(
+                f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]'
+            )
+        else:
+            pct = settings.risk_per_trade_pct
+            console.print(f'[cyan]Lot sizing: percentage risk ({pct}% of balance)[/]')
 
     bot = TradingBot(
         settings,
@@ -149,7 +173,7 @@ def trade(
 
 @main.command()
 @click.option('--symbol', default=None, help='Symbol to backtest (e.g. EURUSD).')
-@click.option('--strategy', default=None, help='Strategy name.')
+@click.option('--strategy', default=None, help='Strategy name. Mutually exclusive with --config.')
 @click.option('--bars', default=1000, show_default=True, help='Number of bars to fetch.')
 @click.option(
     '--save-chart/--no-save-chart',
@@ -182,27 +206,31 @@ def trade(
     'lot_size',
     default=None,
     type=float,
-    help='Fixed lot size per trade (FixedLotSizeManager). Mutually exclusive with --risk-amount.',
+    help='Fixed lot size per trade. Mutually exclusive with --risk-amount and --config.',
 )
 @click.option(
     '--risk-amount',
     'risk_amount',
     default=None,
     type=float,
-    help='Fixed dollar amount at risk per trade (FixedRiskLotSizeManager). Mutually exclusive with --lot-size.',
+    help='Fixed dollar amount at risk per trade. Mutually exclusive with --lot-size and --config.',
+)
+@click.option(
+    '--config',
+    'bot_config',
+    default=None,
+    type=click.Path(exists=True, dir_okay=False),
+    help=(
+        'Path to a Python bot config file (e.g. bot_config.py). '
+        'May define build_strategy(settings) and/or build_lot_size_manager(). '
+        'Mutually exclusive with --strategy, --lot-size, and --risk-amount.'
+    ),
 )
 @click.option(
     '--save-signal-chart/--no-save-signal-chart',
     'save_signal_chart',
     default=False,
     help='Save a strategy-specific signal PNG after the backtest (requires kaleido).',
-)
-@click.option(
-    '--strategy-config',
-    'strategy_config',
-    default=None,
-    type=click.Path(exists=True, dir_okay=False),
-    help='Path to a YAML composite-strategy config file. Overrides --strategy.',
 )
 def backtest(
     symbol: str | None,
@@ -214,13 +242,14 @@ def backtest(
     tp_pips: float | None,
     lot_size: float | None,
     risk_amount: float | None,
+    bot_config: str | None,
     save_signal_chart: bool,
-    strategy_config: str | None,
 ) -> None:
     """Run a strategy backtest and print statistics."""
     from trading_bot.backtesting import Backtester
     from trading_bot.data import get_data_provider
-    from trading_bot.strategies import get_strategy, load_composite_strategy
+    from trading_bot.strategies import get_strategy
+    from trading_bot.utils.bot_config_loader import load_bot_config
     from trading_bot.utils.lot_size import (
         BaseLotSizeManager,
         FixedLotSizeManager,
@@ -229,16 +258,25 @@ def backtest(
     from trading_bot.visualization.charts import plot_backtest
     from trading_bot.visualization.charts import save_chart as save_chart_fn
 
-    if strategy_config is not None and strategy is not None:
-        raise click.UsageError('--strategy-config and --strategy are mutually exclusive.')
-    if lot_size is not None and risk_amount is not None:
-        raise click.UsageError('--lot-size and --risk-amount are mutually exclusive.')
+    if bot_config is not None:
+        conflicts = [
+            n
+            for n, v in (
+                ('--strategy', strategy),
+                ('--lot-size', lot_size),
+                ('--risk-amount', risk_amount),
+            )
+            if v is not None
+        ]
+        if conflicts:
+            raise click.UsageError(f'--config is mutually exclusive with: {", ".join(conflicts)}')
+    else:
+        if lot_size is not None and risk_amount is not None:
+            raise click.UsageError('--lot-size and --risk-amount are mutually exclusive.')
 
     settings = get_settings()
     if symbol:
         settings = settings.model_copy(update={'primary_symbol': symbol.upper()})
-    if strategy:
-        settings = settings.model_copy(update={'strategy_name': strategy})
     if sl_pips is not None:
         settings = settings.model_copy(update={'stop_loss_pips': sl_pips})
     if tp_pips is not None:
@@ -250,16 +288,29 @@ def backtest(
     if save_csv is None:
         save_csv = settings.backtest_save_csv
 
-    # Build lot size manager (None → Backtester uses its FixedLotSizeManager(0.1) default)
+    composite_strat = None
     lot_mgr: BaseLotSizeManager | None = None
-    if risk_amount is not None:
-        lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
-        console.print(
-            f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]'
-        )
-    elif lot_size is not None:
-        lot_mgr = FixedLotSizeManager(lot_size=lot_size)
-        console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
+
+    if bot_config is not None:
+        composite_strat, lot_mgr = load_bot_config(bot_config, settings)
+        if composite_strat is not None:
+            console.print(
+                f'[cyan]Strategy: CompositeStrategy ({len(composite_strat.entries)} entries, '
+                f'mode={composite_strat.mode}) (from {bot_config})[/]'
+            )
+        if lot_mgr is not None:
+            console.print(f'[cyan]Lot sizing: {type(lot_mgr).__name__} (from {bot_config})[/]')
+    else:
+        if strategy:
+            settings = settings.model_copy(update={'strategy_name': strategy})
+        if risk_amount is not None:
+            lot_mgr = FixedRiskLotSizeManager(risk_amount=risk_amount)
+            console.print(
+                f'[cyan]Lot sizing: FixedRiskLotSizeManager (risk_amount=${risk_amount:,.2f})[/]'
+            )
+        elif lot_size is not None:
+            lot_mgr = FixedLotSizeManager(lot_size=lot_size)
+            console.print(f'[cyan]Lot sizing: FixedLotSizeManager (lot_size={lot_size})[/]')
 
     provider = get_data_provider(settings)
     provider.connect()
@@ -275,14 +326,7 @@ def backtest(
 
     console.print(f'[green]Got {len(df)} bars ({df.index[0]} → {df.index[-1]})[/]')
 
-    if strategy_config is not None:
-        strat = load_composite_strategy(strategy_config, settings)
-        console.print(
-            f'[cyan]Strategy: CompositeStrategy ({len(strat.entries)} entries, '  # type: ignore[attr-defined]
-            f'mode={strat.mode})[/]'  # type: ignore[attr-defined]
-        )
-    else:
-        strat = get_strategy(settings)
+    strat = composite_strat if composite_strat is not None else get_strategy(settings)
     bt = Backtester(strat, lot_size_manager=lot_mgr)
     result = bt.run(df, settings.primary_symbol)
 
@@ -451,13 +495,13 @@ def fetch_ohlcv(
 
     # click.DateTime returns naive datetime objects — treat as UTC
     start: datetime | None = (
-        start_dt.replace(tzinfo=UTC) if start_dt is not None else None  # type: ignore[union-attr]
+        start_dt.replace(tzinfo=UTC) if start_dt is not None else None
     )
     end: datetime | None = None
     if end_dt is not None:
         if start is None:
             raise click.UsageError('--end requires --start.')
-        end = end_dt.replace(tzinfo=UTC)  # type: ignore[union-attr]
+        end = end_dt.replace(tzinfo=UTC)
 
     settings = get_settings()
     sym = symbol.upper() if symbol else settings.primary_symbol

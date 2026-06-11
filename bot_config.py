@@ -1,13 +1,12 @@
-"""Composite strategy definition.
+"""Unified bot configuration.
 
-Edit this file directly to configure your strategy mix.
-Pass it to the CLI with:
-    trading-bot trade    --strategy-config strategy_config.py
-    trading-bot backtest --strategy-config strategy_config.py
+Defines the composite strategy and position sizing in one place.
+Pass this file to the CLI with:
+    trading-bot trade    --config bot_config.py
+    trading-bot backtest --config bot_config.py
 
-The module must expose a ``build(settings: Settings) -> CompositeStrategy`` function.
-Settings overrides (stop_loss_pips, sma_fast, etc.) are applied via model_copy()
-so only the keys you specify change — everything else inherits from .env / defaults.
+Both functions are optional — omit either one to fall back to the inline
+CLI flags (--strategy, --lot-size, --risk-amount, etc.) or .env defaults.
 """
 
 from trading_bot.config import Settings
@@ -15,9 +14,10 @@ from trading_bot.strategies.composite import CombineMode, CompositeStrategy, Str
 from trading_bot.strategies.macd_strategy import MACDStrategy
 from trading_bot.strategies.rsi_strategy import RSIStrategy
 from trading_bot.strategies.sma_crossover import SMACrossoverStrategy
+from trading_bot.utils.lot_size import BaseLotSizeManager, FixedLotSizeManager
 
 
-def build(settings: Settings) -> CompositeStrategy:
+def build_strategy(settings: Settings) -> CompositeStrategy:
     """Build and return the composite strategy.
 
     Args:
@@ -107,3 +107,18 @@ def build(settings: Settings) -> CompositeStrategy:
         ],
         mode=CombineMode.MAJORITY_VOTE,
     )
+
+
+def build_lot_size_manager() -> BaseLotSizeManager:
+    """Return the configured lot size manager.
+
+    Returns:
+        An instance of any :class:`~trading_bot.utils.lot_size.BaseLotSizeManager`
+        subclass.
+    """
+    # ── Option A: fixed lot size ───────────────────────────────────────────
+    return FixedLotSizeManager(lot_size=0.1)
+
+    # ── Option B: fixed dollar risk per trade ──────────────────────────────
+    # from trading_bot.utils.lot_size import FixedRiskLotSizeManager
+    # return FixedRiskLotSizeManager(risk_amount=100.0, min_lot=0.01)
